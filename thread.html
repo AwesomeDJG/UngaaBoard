@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Messages</title>
+  <link rel="stylesheet" href="styles.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    #compose { margin-top:15px; display:flex; gap:8px; }
+    textarea { width:100%; padding:10px; height:80px; }
+  </style>
+</head>
+<body>
+<button onclick="history.back()">← Back</button>
+<h2 id="peerName">Messages</h2>
+<div id="thread">Loading…</div>
+
+<div id="compose">
+  <textarea id="body" placeholder="Write a message…"></textarea>
+  <button onclick="send()">Send</button>
+</div>
+
+<script>
+/* SUPABASE CLIENT (singleton) */
+if (!window.supabaseClient) {
+  window.supabaseClient = window.supabase.createClient(
+    "https://gftohejwfjstfhkfmyjd.supabase.co",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmdG9oZWp3ZmpzdGZoa2ZteWpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMxMjk0NjgsImV4cCI6MjA3ODcwNTQ2OH0.Zq7E-xAknaZBDkCN6IecWqsDc20vTVuNt54MBWNATdY"
+  );
+}
+const client = window.supabaseClient;
+
+const params = new URLSearchParams(window.location.search);
+const peerId = params.get("peer");
+if (!peerId) { document.getElementById("thread").textContent = "No peer specified."; throw new Error("No peer"); }
+
+function getLocalUser() {
+  const id = localStorage.getItem("user_id");
+  const username = localStorage.getItem("username");
+  return id && username ? { id, username } : null;
+}
+
+async function loadPeerName() {
+  const { data } = await client.from("users").select("username").eq("id", peerId).maybeSingle();
+  document.getElementById("peerName").textContent = data?.username || "Messages";
+}
+
+async function loadThread() {
+  const me = getLocalUser();
+  if (!me) { document.getElementById("thread").textContent = "Sign in to see messages."; return; }
+
+  const { data, error } = await client
+    .from("dms")
+    .select("*")
+    .or(`and(sender_id.eq.${me.id},receiver_id.eq.${peerId}),and(sender_id.eq.${peerId},receiver_id.eq.${me.id})`)
+    .order("timestamp", { ascending: true });
+
+  if (error) { document.getElementById("thread").textContent = "Failed to load messages."; return; }
+
+  const threadDiv = document.getElementById("thread");
+  threadDiv.innerHTML = "";
+  data.forEach(m => {
+    const div = document.createElement("div");
+    div.className = "msg " + (m.sender_id === me.id ? "me" : "them");
+    const time = new Date(m.timestamp).toLocaleString();
+    div.innerHTML = `<div>${m.body}</div><div style="font-size:12px;color:#666;margin-top:6px;">${time}</div>`;
+    threadDiv.appendChild(div);
+  });
+  // scroll to bottom
+  window.scrollTo(0, document.body.scrollHeight);
+}
+
+async function send() {
+  const me = getLocalUser();
+  if (!me) return alert("Sign in to send messages.");
+  const body = document.getElementById("body").value.trim();
+  if (!body) return;
+
+  // Using epoch ms for timestamp
+  const ts = Date.now();
+
+  const { error } = await client
+    .from("dms")
+    .insert([{
+      sender_id: me.id,
+      receiver_id: peerId,
+      body,
+      timestamp: ts,
+      read: false
+    }]);
+
+  if (error) return alert("Failed to send: " + error.message);
+  document.getElementById("body").value = "";
+  await loadThread();
+}
+
+(async function init() {
+  await loadPeerName();
+  await loadThread();
+})();
+</script>
+<body>
+  <canvas id="bgParticles"></canvas>
+  <script src="particles.js" defer></script>
+
+  <div class="main">

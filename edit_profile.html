@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Edit Profile</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="shortcut icon" href="logo.png" type="image/x-icon">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="theme.js" defer></script>
+</head>
+<body class="narrow-view">
+
+<h2>Edit Your Profile</h2>
+<div id="error"></div>
+
+<form onsubmit="saveChanges(); return false;">
+  <label>Bio</label>
+  <textarea id="bio" placeholder="Write something…" rows="5"></textarea>
+
+  <label>Profile Picture URL</label>
+  <input id="avatar_url" placeholder="https://example.com/image.png">
+
+  <label>Banner Image URL</label>
+  <input id="banner_url" placeholder="https://example.com/banner.png">
+
+  <button type="submit">Save Changes</button>
+</form>
+
+<script>
+/* -----------------------------------
+   SUPABASE CLIENT (singleton)
+------------------------------------ */
+if (!window.supabaseClient) {
+  window.supabaseClient = window['supabase'].createClient(
+    "https://gftohejwfjstfhkfmyjd.supabase.co",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmdG9oZWp3ZmpzdGZoa2ZteWpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMxMjk0NjgsImV4cCI6MjA3ODcwNTQ2OH0.Zq7E-xAknaZBDkCN6IecWqsDc20vTVuNt54MBWNATdY"
+  );
+}
+const client = window.supabaseClient;
+
+/* -----------------------------------
+   ERROR DISPLAY
+------------------------------------ */
+function showError(msg) {
+  const e = document.getElementById("error");
+  e.textContent = msg;
+  e.style.display = "block";
+}
+
+/* -----------------------------------
+   GET CURRENT LOGGED-IN USER
+------------------------------------ */
+function getCurrentUser() {
+  const id = localStorage.getItem("user_id");
+  const username = localStorage.getItem("username");
+  if (!id || !username) return null;
+  return { id, username };
+}
+
+/* -----------------------------------
+   LOAD PROFILE INTO FORM
+------------------------------------ */
+async function loadProfile() {
+  const user = getCurrentUser();
+  if (!user) return showError("You must be logged in.");
+
+  const { data, error } = await client
+    .from("profiles")
+    .select("bio, avatar_url, banner_url")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (error) return showError("Failed to load profile.");
+
+  // If profile doesn't exist yet, create empty entry automatically
+  if (!data) {
+    await client.from("profiles").insert({
+      user_id: user.id,
+      username: user.username,
+      bio: "",
+      avatar_url: "",
+      banner_url: ""
+    });
+    document.getElementById("bio").value = "";
+    document.getElementById("avatar_url").value = "";
+    document.getElementById("banner_url").value = "";
+    return;
+  }
+
+  document.getElementById("bio").value = data.bio || "";
+  document.getElementById("avatar_url").value = data.avatar_url || "";
+  document.getElementById("banner_url").value = data.banner_url || "";
+}
+
+/* -----------------------------------
+   SAVE CHANGES
+------------------------------------ */
+async function saveChanges() {
+  const user = getCurrentUser();
+  if (!user) return showError("You must be logged in.");
+
+  const bio = document.getElementById("bio").value.trim();
+  const avatar_url = document.getElementById("avatar_url").value.trim();
+  const banner_url = document.getElementById("banner_url").value.trim();
+
+  const { error } = await client
+    .from("profiles")
+    .upsert({
+      user_id: user.id,
+      username: user.username,
+      bio,
+      avatar_url,
+      banner_url
+    });
+
+  if (error) return showError("Failed to save: " + error.message);
+
+  window.location.href = `profile.html?id=${user.id}`;
+}
+
+/* -----------------------------------
+   INIT
+------------------------------------ */
+loadProfile();
+</script>
+
+<body>
+  <canvas id="bgParticles"></canvas>
+
+<div id="pspWaves" class="wave-container">
+  <div class="wave"></div>
+  <div class="wave"></div>
+</div>
+  <script src="particles.js" defer></script>
+
+  <div class="container">
+<script>
+(function() {
+  // 1. READ SETTINGS
+  const mode = localStorage.getItem('theme_bg_preference') || 'particles';
+  const fontData = localStorage.getItem('custom_font_data');
+
+  // 2. APPLY BACKGROUND
+  const particles = document.getElementById('bgParticles');
+  const waves = document.getElementById('pspWaves');
+
+  if (mode === 'waves') {
+    document.body.classList.add('mode-waves');
+    if(particles) particles.style.display = 'none';
+    if(waves) waves.style.display = 'block';
+  } else {
+    document.body.classList.remove('mode-waves');
+    if(particles) particles.style.display = 'block';
+    if(waves) waves.style.display = 'none';
+  }
+
+  // 3. APPLY FONT
+  if (fontData) {
+    try {
+      const fontFace = new FontFace('CustomUserFont', `url(${fontData})`);
+      fontFace.load().then(f => {
+        document.fonts.add(f);
+        document.documentElement.style.setProperty('--font-main', 'CustomUserFont, system-ui, sans-serif');
+      });
+    } catch(e) { console.log('Font load error'); }
+  }
+})();
+</script>

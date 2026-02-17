@@ -1,0 +1,1367 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>UngaaBoard - All</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="shortcut icon" href="logo.png" type="image/x-icon" />
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+      /* highlight active sort (small) */
+      .sortActive {
+        background: #0077cc;
+        color: white;
+        border:  none;
+        padding: 6px 10px;
+        border-radius: 6px;
+      }
+    </style>
+  </head>
+  <body>
+    <canvas id="bgParticles"></canvas>
+
+    <div id="pspWaves" class="wave-container">
+      <div class="wave"></div>
+      <div class="wave"></div>
+    </div>
+    <script src="particles.js" defer></script>
+
+    <div class="main">
+      <h2>UngaaBoard - c/all</h2>
+      <div id="error"></div>
+
+      <div id="userBox">
+        <div id="userStatus">Checking login ...</div>
+        <div style="display: flex; gap: 10px; align-items: center">
+          <div
+            id="adminModeContainer"
+            style="display: none; align-items: center"
+          >
+            <label style="font-size: 0.9rem; margin-right: 6px"
+              >Admin Mode</label
+            >
+            <input
+              id="adminModeToggle"
+              type="checkbox"
+              title="Enable admin actions (for admins only)"
+            />
+          </div>
+          <button id="logoutBtn" style="display: none" onclick="doLogout()">
+            Sign Out
+          </button>
+        </div>
+      </div>
+
+      <div id="postBox" style="display: none">
+        <h3>Create a Post</h3>
+
+        <div class="post-type-tabs">
+          <button
+            class="tab-btn active"
+            id="tabText"
+            onclick="switchPostTab('text')"
+          >
+            Text
+          </button>
+          <button class="tab-btn" id="tabPoll" onclick="switchPostTab('poll')">
+            Poll
+          </button>
+        </div>
+
+        <input id="title" placeholder="Title" />
+
+        <div id="textInputArea">
+          <textarea
+            id="body"
+            placeholder="Write something ..."
+            rows="4"
+          ></textarea>
+        </div>
+
+        <div id="pollInputArea" style="display: none">
+          <textarea
+            id="pollBody"
+            placeholder="Optional description..."
+            rows="2"
+            style="margin-bottom: 10px"
+          ></textarea>
+          <div style="margin-bottom: 5px; font-weight: bold; font-size: 0.9em">
+            Poll Options:
+          </div>
+          <input
+            class="poll-input"
+            id="pollOpt1"
+            placeholder="Option 1"
+            style="margin-bottom: 5px"
+          />
+          <input
+            class="poll-input"
+            id="pollOpt2"
+            placeholder="Option 2"
+            style="margin-bottom: 5px"
+          />
+          <input
+            class="poll-input"
+            id="pollOpt3"
+            placeholder="Option 3 (optional)"
+            style="margin-bottom: 5px"
+          />
+          <input
+            class="poll-input"
+            id="pollOpt4"
+            placeholder="Option 4 (optional)"
+            style="margin-bottom: 5px"
+          />
+        </div>
+
+        <label for="channelSelect">Channel</label>
+        <select id="channelSelect">
+          <option value="">c/all (no channel)</option>
+        </select>
+        <button onclick="createPost()">Post</button>
+      </div>
+
+      <div class="sortBar">
+        <strong>Sort :</strong>
+        <button id="sort_new" onclick="setSort('new')">New</button>
+        <button id="sort_hot" onclick="setSort('hot')">Hot</button>
+        <button id="sort_top" onclick="setSort('top')">Top</button>
+        <button id="sort_comments" onclick="setSort('comments')">
+          Most Comments
+        </button>
+        <button id="sort_feed" onclick="setSort('feed')">Feed</button>
+        <span id="timeframeBox" style="display: none">
+          <strong>Top timeframe :</strong>
+          <select id="timeframe" onchange="saveTimeframeAndReload()">
+            <option value="all">All Time</option>
+            <option value="day">Past Day</option>
+            <option value="week">Past Week</option>
+            <option value="month">Past Month</option>
+            <option value="year">Past Year</option>
+          </select>
+        </span>
+      </div>
+
+      <h3>Posts</h3>
+      <div id="posts">Loading ...</div>
+    </div>
+
+    <aside class="sidebar">
+    <div class="channelsWidget" id="channelsWidget">
+      <div class="channelsHeader">
+        <strong>Channels</strong>
+        <button class="smallBtn" onclick="openCreateChannel()">+ New</button>
+      </div>
+
+      <div id="channelsList">
+        <div class="muted">Loading channels ...</div>
+      </div>
+
+      <div style="margin-top:10px; font-size:13px;" class="muted">
+        Tip: create a channel to group posts. Posts without a channel appear in c/all.
+      </div>
+    </div>
+
+    <div id="createChannelModal" style="display:none; margin-top:12px;">
+      <div style="border: 1px solid #ddd; background:#fff; padding: 12px; border-radius:6px;">
+        <h4 style="margin:0 0 8px 0;">Create Channel</h4>
+        <input id="newChannelName" placeholder="short-name (letters, numbers, -)" />
+        <input id="newChannelTitle" placeholder="Display title (optional)" />
+        <textarea id="newChannelDesc" placeholder="Description (optional)" rows="3"></textarea>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <button onclick="createChannel()">Create</button>
+          <button onclick="closeCreateChannel()" class="small">Cancel</button>
+        </div>
+        <div id="createChannelError" style="color:#c0392b; margin-top:8px; display:none;"></div>
+      </div>
+    </div>
+
+    <div class="ad-slot" style="margin-top:15px; border: 1px solid #ddd; background:#fff; padding: 10px; border-radius:6px; text-align:center; position: sticky; top: 20px;">
+      <div style="font-size:10px; color:#999; margin-bottom:5px; text-transform:uppercase; letter-spacing:1px; font-weight:bold;">Advertisement</div>
+      
+      <a href="https://ungaaboard-1-16985945.codehs.me/profile.html?id=2e8aac70-01e4-4922-9360-06f971d5c198" target="_blank" rel="noopener noreferrer">
+        <img src="stars.png" alt="Sponsored" style="max-width:100%; height:auto; border-radius:4px; display:block; margin:0 auto;">
+      <b style="color: #000;">Run Ads for Only 50 Cents!</b>
+      </a>
+    </div>
+    </aside>
+
+    <div id="userHoverCard">
+      <div id="cardContent">Loading...</div>
+    </div>
+
+    <script src="autoBadges.js"></script>
+
+    <script>
+      /*
+      SUPABASE CLIENT
+    */
+      const client = window.supabase.createClient(
+        'https://gftohejwfjstfhkfmyjd.supabase.co',
+        'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmdG9oZWp3ZmpzdGZoa2ZteWpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMxMjk0NjgsImV4cCI6MjA3ODcwNTQ2OH0.Zq7E-xAknaZBDkCN6IecWqsDc20vTVuNt54MBWNATdY'
+      );
+      window.client = client;
+
+      /*
+      GLOBAL SORT MODE (persisted)
+    */
+      let currentSort = localStorage.getItem('sort_mode') || 'new';
+      let currentTimeframe = localStorage.getItem('top_timeframe') || 'all';
+
+      /*
+      ADMIN STATE & currentProfile
+    */
+      let currentProfile = null;
+      let adminMode = false;
+
+      /*
+      FOLLOW LISTS (for Feed)
+    */
+      let followingUserIds = [];
+      let followingChannelIds = [];
+
+      /*
+      POST TYPE STATE
+    */
+      let activePostTab = 'text'; // 'text' or 'poll'
+
+      /*
+      UTILS
+    */
+      function showError(msg) {
+        const e = document.getElementById('error');
+        e.textContent = msg;
+        e.style.display = msg ? 'block' : 'none';
+      }
+
+      function getCurrentUser() {
+        const id = localStorage.getItem('user_id');
+        const username = localStorage.getItem('username');
+        if (!id) return null;
+        return { id, username };
+      }
+
+      function escapeHtml(str) {
+        if (str === null || str === undefined) return '';
+        return String(str)
+          .replaceAll('&', '&amp;')
+          .replaceAll('<', '&lt;')
+          .replaceAll('>', '&gt;')
+          .replaceAll('"', '&quot;')
+          .replaceAll("'", '&#39;');
+      }
+
+      /*
+      CHANNEL HELPERS
+    */
+      let channelsCache = [];
+
+      async function loadChannels() {
+        const el = document.getElementById('channelsList');
+        el.innerHTML = 'Loading ... ';
+
+        const { data, error } = await client
+          .from('channels')
+          .select('*')
+          .order('name', { ascending: true });
+
+        if (error) {
+          el.innerHTML = '<div class="muted">Failed to load channels.</div>';
+          console.warn(error);
+          return;
+        }
+
+        channelsCache = data || [];
+
+        // Show "all" first
+        const listHtml = [];
+        listHtml.push(
+          '<div class="channelItem"><a href="index.html">c/all</a></div>'
+        );
+        (data || []).forEach((ch) => {
+          listHtml.push(
+            `<div class="channelItem"><a href="channel.html?id=${
+              ch.id
+            }&name=${encodeURIComponent(ch.name)}">c/${escapeHtml(
+              ch.name
+            )}</a></div>`
+          );
+        });
+        el.innerHTML = listHtml.join('');
+        populateChannelSelect();
+      }
+
+      function openCreateChannel() {
+        document.getElementById('createChannelModal').style.display = 'block';
+      }
+      function closeCreateChannel() {
+        document.getElementById('createChannelModal').style.display = 'none';
+        document.getElementById('createChannelError').style.display = 'none';
+      }
+
+      async function createChannel() {
+        const nameRaw = document.getElementById('newChannelName').value.trim();
+        const title = document.getElementById('newChannelTitle').value.trim();
+        const desc = document.getElementById('newChannelDesc').value.trim();
+        const errEl = document.getElementById('createChannelError');
+
+        if (!nameRaw) {
+          errEl.textContent = 'Please enter a channel short name.';
+          errEl.style.display = 'block';
+          return;
+        }
+        const name = nameRaw.toLowerCase().replaceAll(' ', '-');
+        if (!/^[a-z0-9-]+$/.test(name)) {
+          errEl.textContent = 'Allowed: lowercase letters, numbers, hyphen.';
+          errEl.style.display = 'block';
+          return;
+        }
+
+        const user = getCurrentUser();
+        const created_by = user ? user.id : null;
+        const { data, error } = await client
+          .from('channels')
+          .insert([
+            {
+              name,
+              title,
+              description: desc,
+              created_by,
+              created_at: Date.now(),
+            },
+          ]);
+
+        if (error) {
+          errEl.textContent = error.message || 'Failed to create channel.';
+          errEl.style.display = 'block';
+          return;
+        }
+
+        closeCreateChannel();
+        await loadChannels();
+      }
+
+      function populateChannelSelect() {
+        const sel = document.getElementById('channelSelect');
+        sel.innerHTML = '<option value="">c/all (no channel)</option>';
+        channelsCache.forEach((ch) => {
+          const opt = document.createElement('option');
+          opt.value = ch.id;
+          opt.textContent = `c/${ch.name}`;
+          sel.appendChild(opt);
+        });
+      }
+
+      /*
+      AUTH / PROFILE / ADMIN UI
+    */
+      async function fetchCurrentProfile() {
+        const u = getCurrentUser();
+        if (!u) {
+          currentProfile = null;
+          updateAdminUIVisibility();
+          return null;
+        }
+
+        const { data, error } = await client
+          .from('profiles')
+          .select('user_id, username, avatar_url, is_admin, banned')
+          .eq('user_id', u.id)
+          .maybeSingle();
+
+        if (error) {
+          console.warn('fetch profile error', error);
+          currentProfile = null;
+        } else {
+          currentProfile = data || null;
+        }
+        updateAdminUIVisibility();
+        return currentProfile;
+      }
+
+      function updateAdminUIVisibility() {
+        const container = document.getElementById('adminModeContainer');
+        const toggle = document.getElementById('adminModeToggle');
+        if (currentProfile && currentProfile.is_admin) {
+          container.style.display = 'flex';
+          toggle.checked = !!adminMode;
+          toggle.onchange = () => {
+            adminMode = !!toggle.checked;
+            loadPosts();
+          };
+        } else {
+          container.style.display = 'none';
+          adminMode = false;
+        }
+      }
+
+      async function loadUserStatus() {
+        const user = getCurrentUser();
+        const status = document.getElementById('userStatus');
+        const logoutBtn = document.getElementById('logoutBtn');
+        const postBox = document.getElementById('postBox');
+        await fetchCurrentProfile();
+
+        if (!user) {
+          status.innerHTML =
+            'Not signed in - <a href="signin.html">Sign In</a> | <a href="signup.html">Sign Up</a>';
+          logoutBtn.style.display = 'none';
+          postBox.style.display = 'none';
+        } else {
+          const displayName = escapeHtml(user.username);
+          const idEnc = encodeURIComponent(user.id);
+          let adminBadge = '';
+          if (currentProfile && currentProfile.is_admin)
+            adminBadge = '<span class="adminBadge">Admin</span>';
+          status.innerHTML = `Signed in as: <a href="profile.html?id=${idEnc}">${displayName}</a> ${adminBadge}`;
+          logoutBtn.style.display = 'inline-block';
+          if (currentProfile && currentProfile.banned) {
+            postBox.style.display = 'none';
+            status.innerHTML +=
+              ' <span style="color:#c0392b; margin-left:8px;">(Banned)</span>';
+          } else {
+            postBox.style.display = 'block';
+          }
+        }
+      }
+
+      async function doLogout() {
+        localStorage.removeItem('user_id');
+        localStorage.removeItem('username');
+        currentProfile = null;
+        adminMode = false;
+        await loadUserStatus();
+        await loadPosts();
+      }
+
+      /*
+      SORT HANDLERS
+    */
+      function setSort(type) {
+        currentSort = type;
+        localStorage.setItem('sort_mode', currentSort);
+        if (type === 'top')
+          document.getElementById('timeframeBox').style.display =
+            'inline-block';
+        else document.getElementById('timeframeBox').style.display = 'none';
+
+        ['new', 'hot', 'top', 'comments', 'feed'].forEach((s) => {
+          const btn = document.getElementById(`sort_${s}`);
+          if (btn) btn.classList.toggle('sortActive', s === type);
+        });
+
+        loadPosts();
+      }
+
+      function saveTimeframeAndReload() {
+        const tf = document.getElementById('timeframe').value;
+        currentTimeframe = tf;
+        localStorage.setItem('top_timeframe', tf);
+        loadPosts();
+      }
+
+      function hotScore(post) {
+        const s = (Number(post.uptoes) || 0) - (Number(post.downtoes) || 0);
+        const order = Math.log10(Math.max(Math.abs(s), 1));
+        const sign = s > 0 ? 1 : s < 0 ? -1 : 0;
+        const age_seconds = (Number(post.timestamp) || 0) / 1000 - 1134028003;
+        return sign * order + age_seconds / 45000;
+      }
+
+      function detectLinks(text) {
+        if (!text) return '';
+        const escaped = escapeHtml(text);
+        const urlRegex = /https?:\/\/[^\s<>"']+/g;
+        return escaped.replace(urlRegex, (url) => {
+          const lower = url.toLowerCase();
+          if (
+            /\.(png|jpe?g|gif|webp|bmp|svg|tiff?|heic|avif)(\?.*)?$/i.test(
+              lower
+            )
+          ) {
+            return `<br><img class="thumb" src="${url}" alt="preview">`;
+          }
+          if (/(scale-to-width|imageview|media|thumb)/i.test(lower)) {
+            return `<br><img class="thumb" src="${url}" alt="preview">`;
+          }
+          return `<br><a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+        });
+      }
+
+      /*
+      ADMIN ACTIONS
+    */
+      async function adminDeletePost(postId) {
+        if (!currentProfile?.is_admin || !adminMode)
+          return alert('Admin mode required.');
+        if (!confirm('Admin: delete this post?')) return false;
+        const { error: delCommentsErr } = await client
+          .from('comments')
+          .delete()
+          .eq('post_id', postId);
+        if (delCommentsErr) {
+          showError('Failed to delete comments: ' + delCommentsErr.message);
+          return false;
+        }
+        const { error: delPostErr } = await client
+          .from('messages')
+          .delete()
+          .eq('id', postId);
+        if (delPostErr) {
+          showError('Failed to delete post: ' + delPostErr.message);
+          return false;
+        }
+        await loadPosts();
+        return true;
+      }
+
+      async function adminToggleGlobalPin(postId, value) {
+        if (!currentProfile?.is_admin || !adminMode)
+          return alert('Admin mode required.');
+        const { error } = await client
+          .from('messages')
+          .update({ global_pinned: value })
+          .eq('id', postId);
+        if (error) {
+          showError('Failed to update global pinned: ' + error.message);
+          return false;
+        }
+        await loadPosts();
+        return true;
+      }
+
+      async function adminLockPost(postId, value) {
+        if (!currentProfile?.is_admin || !adminMode)
+          return alert('Admin mode required.');
+        const { error } = await client
+          .from('messages')
+          .update({ locked: value })
+          .eq('id', postId);
+        if (error) {
+          showError('Failed to update locked: ' + error.message);
+          return false;
+        }
+        await loadPosts();
+        return true;
+      }
+
+      async function adminBanUser(userId, value) {
+        if (!currentProfile?.is_admin || !adminMode)
+          return alert('Admin mode required.');
+        if (!confirm(`${value ? 'Ban' : 'Unban'} this user?`)) return false;
+        const { error } = await client
+          .from('profiles')
+          .update({ banned: value })
+          .eq('user_id', userId);
+        if (error) {
+          showError('Failed to update ban: ' + error.message);
+          return false;
+        }
+        if (value && currentProfile && currentProfile.user_id === userId) {
+          alert('You have banned yourself. Logging out.');
+          doLogout();
+        }
+        await loadPosts();
+        return true;
+      }
+
+      async function deletePost(postId) {
+        const user = getCurrentUser();
+        if (!user) return alert('Sign in first.');
+        if (!confirm('Delete this post?')) return;
+        const { data: post, error: postErr } = await client
+          .from('messages')
+          .select('user_id')
+          .eq('id', postId)
+          .maybeSingle();
+        if (postErr || !post) {
+          showError('Failed to verify post ownership.');
+          return;
+        }
+        if (post.user_id !== user.id) {
+          showError('You can only delete your own posts.');
+          return;
+        }
+        const { error: delCommentsErr } = await client
+          .from('comments')
+          .delete()
+          .eq('post_id', postId);
+        if (delCommentsErr) {
+          showError('Failed to delete comments: ' + delCommentsErr.message);
+          return;
+        }
+        const { error: delPostErr } = await client
+          .from('messages')
+          .delete()
+          .eq('id', postId);
+        if (delPostErr) {
+          showError('Failed to delete post: ' + delPostErr.message);
+          return;
+        }
+        await loadPosts();
+      }
+
+      /*
+      HELPERS: fetch follow lists
+    */
+      async function fetchFollowLists() {
+        followingUserIds = [];
+        followingChannelIds = [];
+        const user = getCurrentUser();
+        if (!user) return;
+
+        const { data: userFollows, error: ufErr } = await client
+          .from('follows')
+          .select('following_id')
+          .eq('follower_id', user.id);
+        if (!ufErr && userFollows) {
+          followingUserIds = userFollows.map((r) => String(r.following_id));
+        }
+
+        const { data: chFollows, error: chErr } = await client
+          .from('channel_follows')
+          .select('channel_id')
+          .eq('user_id', user.id);
+        if (!chErr && chFollows) {
+          followingChannelIds = chFollows.map((r) => Number(r.channel_id));
+        }
+        followingUserIds = Array.from(new Set(followingUserIds));
+        followingChannelIds = Array.from(new Set(followingChannelIds));
+      }
+
+      /*
+      LOAD POSTS
+    */
+      async function loadPosts() {
+        showError('');
+        const postsDiv = document.getElementById('posts');
+        postsDiv.textContent = 'Loading ... ';
+
+        const currentUser = getCurrentUser();
+        if (currentSort === 'feed' && !currentUser) {
+          postsDiv.innerHTML =
+            '<div class="muted">Sign in to view your Feed - posts from users and channels you follow.</div>';
+          return;
+        }
+
+        if (currentSort === 'feed') {
+          await fetchFollowLists();
+        }
+
+        // 1) all posts
+        const { data: posts, error: postErr } = await client
+          .from('messages')
+          .select('*');
+        if (postErr) {
+          postsDiv.textContent = 'Failed to load posts: ' + postErr.message;
+          return;
+        }
+        const postsArr = posts || [];
+
+        // 2) load authors
+        const { data: profiles } = await client.from('profiles').select('*');
+        const profileMap = {};
+        (profiles || []).forEach((p) => (profileMap[p.user_id] = p));
+
+        // 3) load comment counts
+        const postIds = postsArr.map((p) => p.id).filter(Boolean);
+        const commentMap = {};
+        if (postIds.length > 0) {
+          const { data: commentsForPosts, error: commentsErr } = await client
+            .from('comments')
+            .select('post_id')
+            .in('post_id', postIds);
+          if (!commentsErr && commentsForPosts) {
+            commentsForPosts.forEach(
+              (c) => (commentMap[c.post_id] = (commentMap[c.post_id] || 0) + 1)
+            );
+          }
+        }
+
+        // 4) load channels
+        const { data: channels } = await client.from('channels').select('*');
+        const channelMap = {};
+        (channels || []).forEach((ch) => (channelMap[ch.id] = ch));
+
+        // 5) Filter & Sort
+        const adminPinned = postsArr.filter((p) => p.global_pinned);
+        let normal = postsArr.filter((p) => !p.global_pinned);
+
+        if (currentSort === 'feed') {
+          normal = normal.filter((p) => {
+            if (followingUserIds.includes(String(p.user_id))) return true;
+            if (
+              p.channel_id != null &&
+              followingChannelIds.includes(Number(p.channel_id))
+            )
+              return true;
+            return false;
+          });
+          normal.forEach((p) => (p._hot = hotScore(p)));
+          normal.sort((a, b) => (b._hot || 0) - (a._hot || 0));
+        } else {
+          if (currentSort === 'new') {
+            normal.sort(
+              (a, b) => (Number(b.timestamp) || 0) - (Number(a.timestamp) || 0)
+            );
+          } else if (currentSort === 'hot') {
+            normal.forEach((p) => (p._hot = hotScore(p)));
+            normal.sort((a, b) => (b._hot || 0) - (a._hot || 0));
+          } else if (currentSort === 'comments') {
+            normal.sort(
+              (a, b) => (commentMap[b.id] || 0) - (commentMap[a.id] || 0)
+            );
+          } else if (currentSort === 'top') {
+            let cutoff = 0,
+              now = Date.now();
+            if (currentTimeframe === 'day') cutoff = now - 86400000;
+            else if (currentTimeframe === 'week') cutoff = now - 604800000;
+            else if (currentTimeframe === 'month') cutoff = now - 2592000000;
+            else if (currentTimeframe === 'year') cutoff = now - 31536000000;
+            const filtered =
+              currentTimeframe === 'all'
+                ? normal
+                : normal.filter((p) => (Number(p.timestamp) || 0) >= cutoff);
+            filtered.sort(
+              (a, b) =>
+                (Number(b.uptoes) || 0) -
+                (Number(b.downtoes) || 0) -
+                ((Number(a.uptoes) || 0) - (Number(a.downtoes) || 0))
+            );
+            normal = filtered;
+          }
+        }
+
+        const sorted = [...adminPinned, ...normal];
+        postsDiv.innerHTML = '';
+        renderPosts(sorted, profileMap, commentMap, channelMap, postsDiv);
+      }
+
+      function renderPosts(
+        posts,
+        profileMap,
+        commentMap,
+        channelMap,
+        postsDiv
+      ) {
+        const currentUser = getCurrentUser();
+        posts.forEach((post) => {
+          const p = profileMap[post.user_id] || {};
+          const pfp = p.avatar_url || 'https://via.placeholder.com/34';
+          const username = p.username || 'unknown';
+          const commentCount = commentMap[post.id] || 0;
+          const ch = post.channel_id ? channelMap[post.channel_id] : null;
+          const channelHtml = ch
+            ? `<div style="margin-top:6px;"><a href="channel.html?id=${
+                ch.id
+              }&name=${encodeURIComponent(ch.name)}">c/${escapeHtml(
+                ch.name
+              )}</a></div>`
+            : '';
+
+          // Determine Body Content: Text or Poll
+          let bodyHtml = '';
+          if (post.is_poll && post.poll_data) {
+            // Render Poll
+            const pollData = post.poll_data; // { options: [{text, count}], voters: [ids] }
+            const options = pollData.options || [];
+            const voters = pollData.voters || [];
+
+            let userVoted = false;
+            if (currentUser && voters.includes(currentUser.id))
+              userVoted = true;
+
+            // Calculate total votes for percentages
+            let totalVotes = 0;
+            options.forEach((opt) => (totalVotes += opt.count || 0));
+
+            let pollOptionsHtml = '';
+            options.forEach((opt, idx) => {
+              const percent =
+                totalVotes > 0 ? Math.round((opt.count / totalVotes) * 100) : 0;
+              const clickHandler =
+                userVoted || !currentUser
+                  ? ''
+                  : `onclick="votePoll('${post.id}', ${idx})"`;
+
+              // If voted or not logged in, show bar results. If not voted, show clickable area.
+              // Actually, showing bar + clickable is best UI.
+
+              pollOptionsHtml += `
+              <div class="poll-option" ${clickHandler}>
+                <div class="poll-bar-fill" style="width: ${
+                  userVoted ? percent : 0
+                }%;"></div>
+                <div class="poll-text-overlay">${escapeHtml(opt.text)}</div>
+                ${
+                  userVoted
+                    ? `<div class="poll-count">${percent}% (${opt.count})</div>`
+                    : ''
+                }
+              </div>
+            `;
+            });
+
+            const pollClass = userVoted
+              ? 'poll-container poll-voted'
+              : 'poll-container';
+            const description = post.body
+              ? `<div style="margin-bottom:8px;">${detectLinks(
+                  post.body
+                )}</div>`
+              : '';
+
+            bodyHtml = `
+            ${description}
+            <div class="${pollClass}">
+              ${pollOptionsHtml}
+              <div style="font-size:12px; color:#666; margin-top:5px;">
+                Total votes: ${totalVotes} ${userVoted ? '· You voted' : ''}
+              </div>
+            </div>
+          `;
+          } else {
+            // Normal Text Post
+            bodyHtml = `<div style="margin-top: 10px;">${detectLinks(
+              post.body
+            )}</div>`;
+          }
+
+          const div = document.createElement('div');
+          div.className = 'post';
+
+          const showOwnerDelete =
+            currentUser && currentUser.id === post.user_id;
+          const ownerDeleteBtnHtml = showOwnerDelete
+            ? `<button class="voteBtn danger" style="margin-left:8px" onclick="deletePost('${post.id}')">Delete</button>`
+            : '';
+
+          let adminButtonsHtml = '';
+          if (currentProfile?.is_admin && adminMode) {
+            adminButtonsHtml += `<button class="smallBtn danger" onclick="adminDeletePost('${post.id}')">Admin Delete</button>`;
+            adminButtonsHtml += ` <button class="pinBtn smallBtn" onclick="adminToggleGlobalPin('${
+              post.id
+            }', ${post.global_pinned ? 'false' : 'true'})">${
+              post.global_pinned ? 'Unpin' : 'Pin'
+            }</button>`;
+            adminButtonsHtml += ` <button class="lockBtn smallBtn" onclick="adminLockPost('${
+              post.id
+            }', ${post.locked ? 'false' : 'true'})">${
+              post.locked ? 'Unlock' : 'Lock'
+            }</button>`;
+            const authorBanned = p.banned === true;
+            adminButtonsHtml += ` <button class="smallBtn" onclick="adminBanUser('${
+              post.user_id
+            }', ${authorBanned ? 'false' : 'true'})">${
+              authorBanned ? 'Unban' : 'Ban'
+            }</button>`;
+          }
+
+          const authorAdminBadge = p.is_admin
+            ? '<span class="adminBadge">Admin</span>'
+            : '';
+          const adminPinnedBadgeHtml = post.global_pinned
+            ? `<span class="adminPinnedBadge">ADMIN PINNED</span>`
+            : '';
+          const lockedNotice = post.locked
+            ? '<div style="color:#c0392b; margin-top:8px; font-weight:bold;">Thread locked</div>'
+            : '';
+
+          div.innerHTML = `
+          <div class="postHeader">
+            <img class="pfp" src="${escapeHtml(pfp)}" alt="avatar">
+            <div style="flex:1">
+              <div style="font-size:20px; font-weight:bold;">
+                <a href="post.html?id=${post.id}">${escapeHtml(post.title)}</a>
+                ${adminPinnedBadgeHtml}
+              </div>
+              <div style="color:#666;">
+                <a href="profile.html?id=${
+                  post.user_id
+                }" class="userHoverTrigger" data-userid="${
+            post.user_id
+          }">${escapeHtml(username)}</a>
+                ${authorAdminBadge}
+                <span class="metaSmall">· ${new Date(
+                  Number(post.timestamp) || 0
+                ).toLocaleString()}</span>
+                ${channelHtml}
+              </div>
+            </div>
+          </div>
+
+          ${bodyHtml}
+          ${lockedNotice}
+
+          <div class="voteBox">
+            <button class="voteBtn" onclick="vote('${
+              post.id
+            }', 'up')">Uptoe</button>
+            <span id="post_uptoes_${post.id}">${post.uptoes ?? 0}</span>
+            <button class="voteBtn" onclick="vote('${
+              post.id
+            }', 'down')">Downtoe</button>
+            <span id="post_downtoes_${post.id}">${post.downtoes ?? 0}</span>
+            <span style="margin-left:auto;"> ${commentCount}</span>
+            ${ownerDeleteBtnHtml}
+            ${adminButtonsHtml}
+          </div>
+        `;
+          postsDiv.appendChild(div);
+        });
+      }
+
+      /*
+      CREATE POST UI / LOGIC
+    */
+      function switchPostTab(type) {
+        activePostTab = type;
+        document.getElementById('tabText').className =
+          type === 'text' ? 'tab-btn active' : 'tab-btn';
+        document.getElementById('tabPoll').className =
+          type === 'poll' ? 'tab-btn active' : 'tab-btn';
+
+        document.getElementById('textInputArea').style.display =
+          type === 'text' ? 'block' : 'none';
+        document.getElementById('pollInputArea').style.display =
+          type === 'poll' ? 'block' : 'none';
+      }
+
+      async function createPost() {
+        const user = getCurrentUser();
+        if (!user) return alert('You must sign in.');
+        await fetchCurrentProfile();
+        if (currentProfile?.banned) return alert('You are banned.');
+
+        const title = document.getElementById('title').value.trim();
+        const channelIdVal =
+          document.getElementById('channelSelect').value || null;
+        const channel_id =
+          channelIdVal === '' || channelIdVal === null
+            ? null
+            : Number(channelIdVal);
+
+        if (!title) return alert('Title is required.');
+
+        let body = '';
+        let is_poll = false;
+        let poll_data = null;
+
+        if (activePostTab === 'text') {
+          body = document.getElementById('body').value.trim();
+          if (!body) return alert('Body is required.');
+        } else if (activePostTab === 'poll') {
+          body = document.getElementById('pollBody').value.trim();
+          const o1 = document.getElementById('pollOpt1').value.trim();
+          const o2 = document.getElementById('pollOpt2').value.trim();
+          const o3 = document.getElementById('pollOpt3').value.trim();
+          const o4 = document.getElementById('pollOpt4').value.trim();
+
+          if (!o1 || !o2) return alert('Polls need at least 2 options.');
+
+          const opts = [];
+          [o1, o2, o3, o4].forEach((o) => {
+            if (o) opts.push({ text: o, count: 0 });
+          });
+
+          is_poll = true;
+          poll_data = {
+            options: opts,
+            voters: [], // Store array of user_ids who voted in the poll
+          };
+        }
+
+        await client.from('messages').insert([
+          {
+            title,
+            body,
+            user_id: user.id,
+            timestamp: Date.now(),
+            uptoes: 0,
+            downtoes: 0,
+            voters: [],
+            channel_id,
+            is_poll,
+            poll_data,
+          },
+        ]);
+
+        // clear inputs
+        document.getElementById('title').value = '';
+        document.getElementById('body').value = '';
+        document.getElementById('pollBody').value = '';
+        document.getElementById('pollOpt1').value = '';
+        document.getElementById('pollOpt2').value = '';
+        document.getElementById('pollOpt3').value = '';
+        document.getElementById('pollOpt4').value = '';
+        switchPostTab('text'); // reset
+
+        await loadPosts();
+      }
+
+      /*
+      VOTE (Main Post Up/Down)
+    */
+      async function vote(postId, type) {
+        const user = getCurrentUser();
+        if (!user) return alert('Sign in first.');
+        await fetchCurrentProfile();
+        if (currentProfile?.banned) return alert('Banned.');
+
+        const { data: post } = await client
+          .from('messages')
+          .select('*')
+          .eq('id', postId)
+          .maybeSingle();
+        if (!post) {
+          showError('Post not found.');
+          return;
+        }
+
+        let voters = post.voters || [];
+        let up = Number(post.uptoes) || 0;
+        let down = Number(post.downtoes) || 0;
+        const idx = voters.findIndex((v) => v.user_id === user.id);
+        if (idx >= 0 && voters[idx].vote === type) {
+          voters.splice(idx, 1);
+          if (type === 'up') up = Math.max(0, up - 1);
+          else down = Math.max(0, down - 1);
+        } else {
+          if (idx >= 0) {
+            const prev = voters[idx].vote;
+            if (prev === 'up') up = Math.max(0, up - 1);
+            else down = Math.max(0, down - 1);
+            voters.splice(idx, 1);
+          }
+          voters.push({ user_id: user.id, vote: type });
+          if (type === 'up') up++;
+          else down++;
+        }
+
+        await client
+          .from('messages')
+          .update({ voters, uptoes: up, downtoes: down })
+          .eq('id', postId);
+        const upEl = document.getElementById(`post_uptoes_${postId}`);
+        const downEl = document.getElementById(`post_downtoes_${postId}`);
+        if (upEl) upEl.textContent = up;
+        if (downEl) downEl.textContent = down;
+
+        // ADDICTIVE FEATURE TRIGGER:
+        // If it was an upvote, check if the AUTHOR of the post earned a badge
+        if (type === 'up' && window.checkAndAwardBadges) {
+          if (post && post.user_id) {
+            checkAndAwardBadges(post.user_id, 'uptoes');
+          }
+        }
+      }
+
+      /*
+      VOTE (Poll)
+    */
+      async function votePoll(postId, optionIdx) {
+        const user = getCurrentUser();
+        if (!user) return alert('Sign in to vote on polls.');
+
+        // Get fresh data
+        const { data: post } = await client
+          .from('messages')
+          .select('poll_data')
+          .eq('id', postId)
+          .maybeSingle();
+        if (!post || !post.poll_data) return;
+
+        const pollData = post.poll_data;
+        if (pollData.voters && pollData.voters.includes(user.id))
+          return alert('You already voted in this poll.');
+
+        // Update local object
+        pollData.options[optionIdx].count++;
+        if (!pollData.voters) pollData.voters = [];
+        pollData.voters.push(user.id);
+
+        // Write back
+        const { error } = await client
+          .from('messages')
+          .update({ poll_data: pollData })
+          .eq('id', postId);
+        if (error) {
+          alert('Vote failed: ' + error.message);
+        } else {
+          await loadPosts();
+        }
+      }
+
+      /*
+      HOVER CARD LOGIC (Updated for Badges)
+    */
+      let hoverTimeout;
+      const hoverCard = document.getElementById('userHoverCard');
+      const cardContent = document.getElementById('cardContent');
+
+      document.body.addEventListener('mouseover', (e) => {
+        if (e.target.classList.contains('userHoverTrigger')) {
+          clearTimeout(hoverTimeout);
+          const userId = e.target.getAttribute('data-userid');
+          const rect = e.target.getBoundingClientRect();
+          showHoverCard(userId, rect);
+        } else if (hoverCard.contains(e.target) || e.target === hoverCard) {
+          clearTimeout(hoverTimeout);
+        }
+      });
+
+      document.body.addEventListener('mouseout', (e) => {
+        if (
+          e.target.classList.contains('userHoverTrigger') ||
+          hoverCard.contains(e.target) ||
+          e.target === hoverCard
+        ) {
+          hoverTimeout = setTimeout(() => {
+            hoverCard.style.display = 'none';
+          }, 300);
+        }
+      });
+
+      async function showHoverCard(targetUserId, rect) {
+        // 1. Position the card
+        hoverCard.style.top = window.scrollY + rect.bottom + 5 + 'px';
+        hoverCard.style.left = window.scrollX + rect.left + 'px';
+        hoverCard.style.display = 'block';
+
+        cardContent.innerHTML = '<div class="muted">Loading bio...</div>';
+
+        const currentUser = getCurrentUser();
+
+        // 2. Fetch Data in Parallel (Profile + Badges)
+        const [profileRes, badgeRes] = await Promise.all([
+          client
+            .from('profiles')
+            .select('*')
+            .eq('user_id', targetUserId)
+            .maybeSingle(),
+          client.from('user_badges').select('*'),
+        ]);
+
+        const profile = profileRes.data;
+        const allBadges = badgeRes.data || [];
+
+        if (profileRes.error || !profile) {
+          cardContent.innerHTML = '<div class="muted">User not found</div>';
+          return;
+        }
+
+        // 3. Process Badges (Client-Side Filter)
+        const userBadges = allBadges.filter((badge) => {
+          let holders = badge.holders;
+          if (typeof holders === 'string') {
+            try {
+              holders = JSON.parse(holders);
+            } catch (e) {
+              return false;
+            }
+          }
+          return Array.isArray(holders) && holders.includes(targetUserId);
+        });
+
+        // Generate Badge HTML
+        let badgesHtml = '';
+        if (userBadges.length > 0) {
+          badgesHtml =
+            '<div style="margin-top:4px; display:flex; gap:4px; flex-wrap:wrap;">';
+          userBadges.forEach((b) => {
+            const colorStyle = b.color
+              ? `border-color:${b.color}; color:${b.color};`
+              : '';
+            let imgHtml = '';
+            if (b.image_url) {
+              imgHtml = `<img src="${b.image_url}" style="width:12px; height:12px; object-fit:contain; display:block;">`;
+            }
+            badgesHtml += `
+            <span class="badge" style="${colorStyle}">
+                ${imgHtml}
+                ${escapeHtml(b.label)}
+            </span>`;
+          });
+          badgesHtml += '</div>';
+        }
+
+        // 4. Check Follow Status
+        let isFollowing = false;
+        if (currentUser && currentUser.id !== targetUserId) {
+          const { data: followData } = await client
+            .from('follows')
+            .select('*')
+            .match({ follower_id: currentUser.id, following_id: targetUserId })
+            .maybeSingle();
+          if (followData) isFollowing = true;
+        }
+
+        // 5. Build Final Content
+        const bioText = profile.bio
+          ? escapeHtml(profile.bio)
+          : '<span class="muted">No bio available.</span>';
+        const pfp = profile.avatar_url || 'https://via.placeholder.com/50';
+
+        let btnHtml = '';
+        if (!currentUser)
+          btnHtml =
+            '<div class="muted" style="font-size:12px;">Sign in to follow</div>';
+        else if (currentUser.id === targetUserId)
+          btnHtml =
+            '<div class="muted" style="font-size:12px;">This is you</div>';
+        else {
+          if (isFollowing)
+            btnHtml = `<button class="btn-unfollow" onclick="toggleFollowFromCard('${targetUserId}', false)">Unfollow</button>`;
+          else
+            btnHtml = `<button class="btn-follow" onclick="toggleFollowFromCard('${targetUserId}', true)">Follow</button>`;
+        }
+
+        cardContent.innerHTML = `
+        <div class="card-header">
+          <img src="${escapeHtml(pfp)}" class="card-avatar">
+          <div>
+            <div class="card-username">u/${escapeHtml(profile.username)}</div>
+            ${badgesHtml} 
+          </div>
+        </div>
+        <div class="card-bio">${bioText}</div>
+        ${btnHtml}
+      `;
+      }
+
+      async function toggleFollowFromCard(targetId, doFollow) {
+        const user = getCurrentUser();
+        if (!user) return;
+
+        cardContent.innerHTML +=
+          ' <span class="muted" style="font-size:10px;">Processing...</span>';
+        if (doFollow) {
+          await client.from('follows').insert([
+            {
+              follower_id: user.id,
+              following_id: targetId,
+              created_at: new Date(),
+            },
+          ]);
+          // ADDICTIVE TRIGGER: Check badges
+          if (window.checkAndAwardBadges) {
+            checkAndAwardBadges(targetId, 'followers');
+          }
+        } else {
+          await client
+            .from('follows')
+            .delete()
+            .match({ follower_id: user.id, following_id: targetId });
+        }
+
+        if (doFollow) followingUserIds.push(String(targetId));
+        else
+          followingUserIds = followingUserIds.filter(
+            (id) => id !== String(targetId)
+          );
+
+        const btn = hoverCard.querySelector('button');
+        if (btn) {
+          if (doFollow) {
+            btn.className = 'btn-unfollow';
+            btn.textContent = 'Unfollow';
+            btn.onclick = () => toggleFollowFromCard(targetId, false);
+          } else {
+            btn.className = 'btn-follow';
+            btn.textContent = 'Follow';
+            btn.onclick = () => toggleFollowFromCard(targetId, true);
+          }
+        }
+        const spans = cardContent.querySelectorAll('span');
+        if (spans.length > 0) spans[spans.length - 1].remove();
+      }
+
+      /*
+      INIT
+    */
+      async function init() {
+        const tfEl = document.getElementById('timeframe');
+        if (tfEl) tfEl.value = currentTimeframe || 'all';
+        if (currentSort === 'top')
+          document.getElementById('timeframeBox').style.display =
+            'inline-block';
+
+        setTimeout(() => {
+          ['new', 'hot', 'top', 'comments', 'feed'].forEach((s) => {
+            const btn = document.getElementById(`sort_${s}`);
+            if (btn) btn.classList.toggle('sortActive', s === currentSort);
+          });
+        }, 0);
+
+        await loadUserStatus();
+        await loadChannels();
+        await loadPosts();
+      }
+
+      // Exports
+      window.setSort = setSort;
+      window.loadPosts = loadPosts;
+      window.createChannel = createChannel;
+      window.openCreateChannel = openCreateChannel;
+      window.closeCreateChannel = closeCreateChannel;
+      window.createPost = createPost;
+      window.deletePost = deletePost;
+      window.vote = vote;
+      window.adminDeletePost = adminDeletePost;
+      window.adminToggleGlobalPin = adminToggleGlobalPin;
+      window.adminLockPost = adminLockPost;
+      window.adminBanUser = adminBanUser;
+      window.toggleFollowFromCard = toggleFollowFromCard;
+      window.switchPostTab = switchPostTab;
+      window.votePoll = votePoll;
+
+      init();
+    </script>
+    <script src="theme.js" defer></script>
+    <script>
+      (function () {
+        // 1. READ SETTINGS
+        const mode = localStorage.getItem('theme_bg_preference') || 'particles';
+        const fontData = localStorage.getItem('custom_font_data');
+
+        // 2. APPLY BACKGROUND
+        const particles = document.getElementById('bgParticles');
+        const waves = document.getElementById('pspWaves');
+
+        if (mode === 'waves') {
+          document.body.classList.add('mode-waves');
+          if (particles) particles.style.display = 'none';
+          if (waves) waves.style.display = 'block';
+        } else {
+          document.body.classList.remove('mode-waves');
+          if (particles) particles.style.display = 'block';
+          if (waves) waves.style.display = 'none';
+        }
+
+        // 3. APPLY FONT
+        if (fontData) {
+          try {
+            const fontFace = new FontFace('CustomUserFont', `url(${fontData})`);
+            fontFace.load().then((f) => {
+              document.fonts.add(f);
+              document.documentElement.style.setProperty(
+                '--font-main',
+                'CustomUserFont, system-ui, sans-serif'
+              );
+            });
+          } catch (e) {
+            console.log('Font load error');
+          }
+        }
+      })();
+    </script>
+    <a href="cardClash.html" class="game-btn-floating" title="Play Card Clash">
+      <img src="/cardClash/coverImage.png" alt="Card Clash" />
+    </a>
+    <a href="cardClash.html" class="game-btn-floating" title="Play Card Clash">
+      <img src="/cardClash/coverImage.png" alt="Card Clash" />
+    </a>
+
+
+  </body>
+</html>

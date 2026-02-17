@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>UngaaBoard — Channel</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="shortcut icon" href="logo.png" type="image/x-icon">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="theme.js" defer></script>
+</head>
+<body>
+  <canvas id="bgParticles"></canvas>
+
+<div id="pspWaves" class="wave-container">
+  <div class="wave"></div>
+  <div class="wave"></div>
+</div>
+  <script src="particles.js" defer></script>
+
+  <div class="main">
+    <!-- Channel banner (shown when the channel has a banner_url) -->
+    <div id="channelBannerTop" class="channelBanner">
+      <img id="channelBannerTopImg" src="" alt="Channel banner">
+    </div>
+
+    <div class="channelHead">
+      <img id="channelIconImg" class="channelIcon" src="" alt="Channel icon">
+      <h2 id="pageHeading" style="margin:0;">UngaaBoard — c/all</h2>
+    </div>
+
+    <div id="error"></div>
+
+    <!-- user status -->
+    <div id="userBox">
+      <div id="userStatus">Checking login…</div>
+      <div style="display:flex; gap:10px; align-items:center;">
+        <div id="adminModeContainer" style="display:none; align-items:center;">
+          <label style="font-size:0.9rem; margin-right:6px;">Admin Mode</label>
+          <input id="adminModeToggle" type="checkbox" title="Enable admin actions (for admins only)">
+        </div>
+        <button id="logoutBtn" style="display:none;" onclick="doLogout()">Sign Out</button>
+      </div>
+    </div>
+
+    <!-- create post box (like index.html, always in-page; visible when signed in and not banned) -->
+    <div id="postBox">
+      <h3>Create a Post</h3>
+      <input id="title" placeholder="Title">
+      <textarea id="body" placeholder="Write something…" rows="4"></textarea>
+      <div class="muted" id="postingTo" style="margin:6px 0;">Posting to c/all</div>
+      <button onclick="createPostInChannel()">Post</button>
+    </div>
+
+    <!-- SORT BAR -->
+    <div class="sortBar">
+      <strong>Sort:</strong>
+      <button onclick="setSort('new')">New</button>
+      <button onclick="setSort('hot')">Hot</button>
+      <button onclick="setSort('top')">Top</button>
+      <button onclick="setSort('comments')">Most Comments</button>
+
+      <span id="timeframeBox" style="display:none;">
+        <strong>Top timeframe:</strong>
+        <select id="timeframe" onchange="saveTimeframeAndReload()">
+          <option value="all">All Time</option>
+          <option value="day">Past Day</option>
+          <option value="week">Past Week</option>
+          <option value="month">Past Month</option>
+          <option value="year">Past Year</option>
+        </select>
+      </span>
+
+      <div style="margin-left:auto; font-size:0.9rem; display:flex; gap:10px; align-items:center;" id="channelHeadlineMeta">
+        <!-- follower count & follow button injected here -->
+      </div>
+    </div>
+
+    <h3>Posts</h3>
+    <div id="posts">Loading…</div>
+  </div>
+
+  <aside class="sidebar">
+    <div class="channelsWidget" id="channelsWidget">
+      <div class="channelsHeader">
+        <strong>Channels</strong>
+        <button class="smallBtn" onclick="openCreateChannel()">+ New</button>
+      </div>
+
+      <div id="channelsList">
+        <div class="muted">Loading channels…</div>
+      </div>
+
+      <div style="margin-top:10px; font-size:13px;" class="muted">
+        Tip: create a channel to group posts. Posts without a channel appear in c/all.
+      </div>
+
+      <!-- channel info box (editable for creator) -->
+      <div id="channelInfoBox" class="channelInfo" style="display:none;">
+        <!-- Inline banner preview -->
+        <div id="channelBanner" style="display:none; margin-bottom:10px;">
+          <img id="channelBannerImg" src="" alt="Channel banner" style="width:100%; max-height:160px; object-fit:cover; border-radius:8px; border:1px solid #ddd;">
+        </div>
+
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px;">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <img id="channelIconSidebar" src="" alt="icon" style="width:28px; height:28px; border-radius:6px; border:1px solid #ddd; display:none;">
+              <div style="font-weight:700;" id="infoTitle">c/…</div>
+            </div>
+            <div id="infoCreator" class="muted" style="margin-top:6px;"></div>
+          </div>
+          <div id="channelOwnerControls" style="display:none;">
+            <button class="smallBtn" onclick="enableEditDescription()">Edit desc</button>
+            <button class="smallBtn" onclick="enableEditBanner()">Edit banner</button>
+            <button class="smallBtn" onclick="enableEditIcon()">Edit icon</button>
+          </div>
+        </div>
+
+        <div style="margin-top:8px; display:flex; gap:12px; align-items:flex-start;">
+          <div id="infoDesc" style="white-space:pre-wrap; flex:1;"></div>
+          <div style="min-width:120px; text-align:right;">
+            <div style="margin-bottom:8px;">
+              <div style="font-size:12px; color:#666;">Followers</div>
+              <div id="followerCount" style="font-weight:700; font-size:16px;">0</div>
+            </div>
+            <div id="followControls">
+              <button id="followBtnSidebar" class="followBtn" onclick="toggleFollowFromSidebar()" style="display:none;">Follow</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Description editor -->
+        <div id="descEditor" style="display:none; margin-top:8px;">
+          <textarea id="editDescText" rows="4" style="width:100%; box-sizing:border-box;"></textarea>
+          <div style="display:flex; gap:8px; margin-top:8px;">
+            <button onclick="saveDescription()">Save</button>
+            <button onclick="cancelEditDescription()" class="small">Cancel</button>
+          </div>
+          <div id="descEditMsg" style="color:#c0392b; margin-top:8px; display:none;"></div>
+        </div>
+
+        <!-- Banner editor -->
+        <div id="bannerEditor" style="display:none; margin-top:10px;">
+          <input id="editBannerUrl" placeholder="Paste banner image URL" style="width:100%; box-sizing:border-box;">
+          <div style="display:flex; gap:8px; margin-top:8px;">
+            <button onclick="saveBanner()">Save</button>
+            <button onclick="cancelEditBanner()" class="small">Cancel</button>
+          </div>
+          <div id="bannerEditMsg" style="color:#c0392b; margin-top:8px; display:none;"></div>
+        </div>
+
+        <!-- Icon editor -->
+        <div id="iconEditor" style="display:none; margin-top:10px;">
+          <input id="editIconUrl" placeholder="Paste icon image URL (square works best)" style="width:100%; box-sizing:border-box;">
+          <div style="display:flex; gap:8px; margin-top:8px;">
+            <button onclick="saveIcon()">Save</button>
+            <button onclick="cancelEditIcon()" class="small">Cancel</button>
+          </div>
+          <div id="iconEditMsg" style="color:#c0392b; margin-top:8px; display:none;"></div>
+        </div>
+      </div>
+    </div>
+
+    <div id="createChannelModal" style="display:none; margin-top:12px;">
+      <div style="border:1px solid #ddd; background:#fff; padding:12px; border-radius:6px;">
+        <h4 style="margin:0 0 8px 0;">Create Channel</h4>
+        <input id="newChannelName" placeholder="short-name (letters, numbers, -)" />
+        <input id="newChannelTitle" placeholder="Display title (optional)" />
+        <textarea id="newChannelDesc" placeholder="Description (optional)" rows="3"></textarea>
+        <div style="display:flex; gap:8px; margin-top:8px;">
+          <button onclick="createChannel()">Create</button>
+          <button onclick="closeCreateChannel()" class="small">Cancel</button>
+        </div>
+        <div id="createChannelError" style="color:#c0392b; margin-top:8px; display:none;"></div>
+      </div>
+    </div>
+  </aside>
+
+<script>
+/* ----------------------------
+   SUPABASE CLIENT (singleton)
+----------------------------- */
+if (!window.supabaseClient) {
+  window.supabaseClient = window['supabase'].createClient(
+    "https://gftohejwfjstfhkfmyjd.supabase.co",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmdG9oZWp3ZmpzdGZoa2ZteWpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMxMjk0NjgsImV4cCI6MjA3ODcwNTQ2OH0.Zq7E-xAknaZBDkCN6IecWqsDc20vTVuNt54MBWNATdY"
+  );
+}
+const client = window.supabaseClient;
+
+/* ----------------------------
+   STATE
+----------------------------- */
+let channelsCache = []; // array of channels
+let channelId = null; // current channel id
+let channelName = null; // current channel name
+let channelObj = null; // current channel record
+let channelCreatorProfile = null;
+let currentProfile = null; // logged-in profile
+let adminMode = false;
+
+let currentSort = localStorage.getItem('sort_mode') || 'new';
+let currentTimeframe = localStorage.getItem('top_timeframe') || 'all';
+
+/* ----------------------------
+   UTIL
+----------------------------- */
+function showError(msg) {
+  const e = document.getElementById('error');
+  e.textContent = msg;
+  e.style.display = msg ? 'block' : 'none';
+}
+function getCurrentUser() {
+  const id = localStorage.getItem("user_id");
+  const username = localStorage.getItem("username");
+  if (!id) return null;
+  return { id, username };
+}
+function escapeHtml(s){ if (s===null||s===undefined) return ''; return String(s).replaceAll('&','&amp;').replaceAll('<','&lt;').replaceAll('>','&gt;').replaceAll('"','&quot;').replaceAll("'",'&#39;'); }
+
+/* Updated image/link detection */
+function detectLinks(text) {
+  if (text === null || text === undefined) return '';
+  const escaped = escapeHtml(text);
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+
+  return escaped.replace(urlRegex, url => {
+    const lower = url.toLowerCase();
+
+    // Rule 1: image extensions even with ? or # after them
+    if (/\.(png|jpe?g|gif|webp|bmp|svg|tiff?|heic|avif)(\?.*)?(#.*)?$/i.test(lower)) {
+      return `<br><img class="thumb" src="${url}" alt="preview">`;
+    }
+
+    // Rule 2: extensionless CDN image paths
+    if (/\/(scale-to-width|imageview|media|thumb)\//i.test(lower)) {
+      return `<br><img class="thumb" src="${url}" alt="preview">`;
+    }
+
+    // Fallback link
+    return `<br><a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+  });
+}
+
+/* ----------------------------
+   ROUTING
+----------------------------- */
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get('id')) channelId = Number(urlParams.get('id'));
+if (urlParams.get('name')) channelName = urlParams.get('name');
+
+if (!channelId && !channelName) {
+  const path = window.location.pathname || '';
+  const m = path.match(/\/c\/([^\/]+)/);
+  if (m) channelName = decodeURIComponent(m[1]);
+}
+
+/* ----------------------------
+   AUTH / ADMIN
+----------------------------- */
+async function fetchCurrentProfile() {
+  const u = getCurrentUser();
+  if (!u) {
+    currentProfile = null;
+    updateAdminUIVisibility();
+    return null;
+  }
+
+  const { data, error } = await client
+    .from('profiles')
+    .select('user_id, username, avatar_url, is_admin, banned')
+    .eq('user_id', u.id)
+    .maybeSingle();
+
+  if (error) {
+    console.warn('fetch profile error', error);
+    currentProfile = null;
+  } else {
+    currentProfile = data || null;
+  }
+  updateAdminUIVisibility();
+  return currentProfile;
+}
+
+function updateAdminUIVisibility() {
+  const container = document.getElementById('adminModeContainer');
+  const toggle = document.getElementById('adminModeToggle');
+  if (currentProfile && currentProfile.is_admin) {
+    container.style.display = 'flex';
+    toggle.checked = !!adminMode;
+    toggle.onchange = () => { adminMode = !!toggle.checked; loadPosts(); };
+  } else {
+    container.style.display = 'none';
+    adminMode = false;
+  }
+}
+
+async function loadUserStatus() {
+  const user = getCurrentUser();
+  const status = document.getElementById("userStatus");
+  const logoutBtn = document.getElementById("logoutBtn");
+  const postBox = document.getElementById("postBox");
+
+  await fetchCurrentProfile();
+
+  if (!user) {
+    status.innerHTML = `Not signed in — <a href="signin.html">Sign In</a> | <a href="signup.html">Sign Up</a>`;
+    logoutBtn.style.display = "none";
+    postBox.style.display = "none";
+  } else {
+    const displayName = escapeHtml(user.username);
+    const idEnc = encodeURIComponent(user.id);
+    let adminBadge = "";
+    if (currentProfile && currentProfile.is_admin) adminBadge = `<span class="adminBadge">Admin</span>`;
+    status.innerHTML = `Signed in as: <a href="profile.html?id=${idEnc}">${displayName}</a> ${adminBadge}`;
+    logoutBtn.style.display = "inline-block";
+    // Show post box like index.html if not banned
+    if (currentProfile && currentProfile.banned) {
+      postBox.style.display = "none";
+      status.innerHTML += ` <span style="color:#c0392b; margin-left:8px;">(Banned)</span>`;
+    } else {
+      postBox.style.display = "block";
+    }
+  }
+}
+
+/* ----------------------------
+   CHANNELS LIST
+----------------------------- */
+async function loadChannels() {
+  const el = document.getElementById('channelsList');
+  el.innerHTML = 'Loading…';
+
+  const [{ data: channels, error: chErr }, { data: msgs }, { data: follows }] = await Promise.all([
+    client.from('channels').select('*').order('name', { ascending: true }),
+    client.from('messages').select('id, channel_id'),
+    client.from('channel_follows').select('channel_id, user_id')
+  ]);
+
+  if (chErr) {
+    el.innerHTML = '<div class="muted">Failed to load channels.</div>';
+    console.warn(chErr);
+    return;
+  }
+
+  // build counts/follower maps
+  const counts = {};
+  (msgs || []).forEach(m => { const cid = m.channel_id ?? null; counts[cid] = (counts[cid] || 0) + 1; });
+
+  const followerCounts = {};
+  (follows || []).forEach(f => { const cid = f.channel_id ?? null; followerCounts[cid] = (followerCounts[cid] || 0) + 1; });
+
+  channelsCache = channels || [];
+
+  const listHtml = [];
+  listHtml.push(`<div class="channelItem"><a href="index.html">c/all</a><span class="muted small">${(msgs || []).filter(m=>!m.channel_id).length||''}</span></div>`);
+
+  channelsCache.forEach(ch => {
+    listHtml.push(
+      `<div class="channelItem">
+         <a href="channel.html?id=${ch.id}&name=${encodeURIComponent(ch.name)}">c/${escapeHtml(ch.name)}</a>
+         <span class="muted small">${counts[ch.id] ?? ''} • ${followerCounts[ch.id] ?? 0}</span>
+       </div>`
+    );
+  });
+
+  el.innerHTML = listHtml.join('');
+}
+
+/* Create channel modal */
+function openCreateChannel() { document.getElementById('createChannelModal').style.display = 'block'; }
+function closeCreateChannel() { document.getElementById('createChannelModal').style.display = 'none'; document.getElementById('createChannelError').style.display = 'none'; }
+
+async function createChannel() {
+  const nameRaw = document.getElementById('newChannelName').value.trim();
+  const title = document.getElementById('newChannelTitle').value.trim();
+  const desc = document.getElementById('newChannelDesc').value.trim();
+  const errEl = document.getElementById('createChannelError');
+
+  if (!nameRaw) {
+    errEl.textContent = 'Please enter a channel short name.';
+    errEl.style.display = 'block';
+    return;
+  }
+  const name = nameRaw.toLowerCase().replaceAll(' ', '-');
+  if (!/^[a-z0-9\-]+$/.test(name)) {
+    errEl.textContent = 'Allowed: lowercase letters, numbers, hyphen.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  const user = getCurrentUser();
+  const created_by = user?.id || null;
+
+  const { error } = await client
+    .from('channels')
+    .insert([{ name, title, description: desc, created_by, created_at: Date.now(), banner_url: null, icon_url: null }]);
+
+  if (error) {
+    errEl.textContent = error.message || 'Failed to create channel.';
+    errEl.style.display = 'block';
+    return;
+  }
+
+  closeCreateChannel();
+  await loadChannels();
+}
+
+/* ----------------------------
+   LOAD CHANNEL + banner + icon
+----------------------------- */
+async function loadChannel() {
+  if (!channelId && !channelName) {
+    channelObj = null;
+    channelId = null;
+    channelName = null;
+    document.getElementById('pageHeading').textContent = 'Message Board — c/all';
+    document.getElementById('postingTo').textContent = 'Posting to c/all';
+    document.getElementById('channelInfoBox').style.display = 'none';
+    document.getElementById('channelHeadlineMeta').textContent = '';
+
+    // hide banners/icons
+    document.getElementById('channelBannerTop').style.display = 'none';
+    document.getElementById('channelBanner').style.display = 'none';
+    document.getElementById('channelIconImg').style.display = 'none';
+    document.getElementById('channelIconSidebar').style.display = 'none';
+
+    updateFollowUI(null, false, 0);
+    return;
+  }
+
+  let q = client.from('channels').select('*');
+  if (channelId) q = q.eq('id', channelId); else q = q.eq('name', channelName);
+
+  const { data, error } = await q.maybeSingle();
+  if (error || !data) { showError('Channel not found.'); return; }
+
+  channelObj = data;
+  channelId = data.id;
+  channelName = data.name;
+
+  const titleText = `c/${data.name}` + (data.title ? ` — ${data.title}` : '');
+  document.getElementById('pageHeading').textContent = `UngaaBoard — ${titleText}`;
+  document.getElementById('postingTo').textContent = `Posting to c/${data.name}`;
+
+  // Banner at top
+  const bannerTop = document.getElementById('channelBannerTop');
+  const bannerTopImg = document.getElementById('channelBannerTopImg');
+  if (channelObj.banner_url && String(channelObj.banner_url).trim() !== '') {
+    bannerTopImg.src = channelObj.banner_url;
+    bannerTop.style.display = 'block';
+  } else {
+    bannerTop.style.display = 'none';
+  }
+
+  // Sidebar banner preview
+  const bannerDiv = document.getElementById('channelBanner');
+  const bannerImg = document.getElementById('channelBannerImg');
+  if (channelObj.banner_url && String(channelObj.banner_url).trim() !== '') {
+    bannerImg.src = channelObj.banner_url;
+    bannerDiv.style.display = 'block';
+  } else {
+    bannerDiv.style.display = 'none';
+  }
+
+  // Channel icon (heading + sidebar)
+  const iconHead = document.getElementById('channelIconImg');
+  const iconSide = document.getElementById('channelIconSidebar');
+  if (channelObj.icon_url && String(channelObj.icon_url).trim() !== '') {
+    iconHead.src = channelObj.icon_url;
+    iconHead.style.display = 'block';
+    iconSide.src = channelObj.icon_url;
+    iconSide.style.display = 'inline-block';
+  } else {
+    iconHead.style.display = 'none';
+    iconSide.style.display = 'none';
+  }
+
+  // headline meta: creator info
+  if (data.created_by) {
+    const { data: cp } = await client
+      .from('profiles')
+      .select('user_id, username, avatar_url')
+      .eq('user_id', data.created_by)
+      .maybeSingle();
+    channelCreatorProfile = cp || null;
+    const creatorHtml = channelCreatorProfile
+      ? `Created by <a href="profile.html?id=${channelCreatorProfile.user_id}">${escapeHtml(channelCreatorProfile.username)}</a>`
+      : 'Created by unknown';
+    document.getElementById('channelHeadlineMeta').innerHTML = creatorHtml;
+  } else {
+    channelCreatorProfile = null;
+    document.getElementById('channelHeadlineMeta').textContent = '';
+  }
+
+  populateChannelInfoBox();
+  await loadFollowState();
+}
+
+/* ----------------------------
+   populate sidebar channel info
+----------------------------- */
+function populateChannelInfoBox() {
+  const box = document.getElementById('channelInfoBox');
+  const infoTitle = document.getElementById('infoTitle');
+  const infoCreator = document.getElementById('infoCreator');
+  const infoDesc = document.getElementById('infoDesc');
+
+  if (!channelObj) { box.style.display = 'none'; return; }
+
+  box.style.display = 'block';
+  infoTitle.textContent = `c/${channelObj.name}`;
+  infoDesc.textContent = channelObj.description || '(no description)';
+
+  if (channelCreatorProfile) {
+    infoCreator.innerHTML = `by <a href="profile.html?id=${channelCreatorProfile.user_id}">${escapeHtml(channelCreatorProfile.username)}</a>`;
+  } else {
+    infoCreator.textContent = '';
+  }
+
+  const ownerControls = document.getElementById('channelOwnerControls');
+  const currentUser = getCurrentUser();
+  if (currentUser && channelObj.created_by && currentUser.id === channelObj.created_by) {
+    ownerControls.style.display = 'block';
+  } else {
+    ownerControls.style.display = 'none';
+  }
+
+  cancelEditDescription();
+  cancelEditBanner();
+  cancelEditIcon();
+}
+
+/* Description editor */
+function enableEditDescription() {
+  const editor = document.getElementById('descEditor');
+  const textarea = document.getElementById('editDescText');
+  textarea.value = channelObj.description || '';
+  editor.style.display = 'block';
+  document.getElementById('infoDesc').style.display = 'none';
+}
+function cancelEditDescription() {
+  document.getElementById('descEditor').style.display = 'none';
+  document.getElementById('infoDesc').style.display = 'block';
+  document.getElementById('descEditMsg').style.display = 'none';
+}
+async function saveDescription() {
+  const txt = document.getElementById('editDescText').value.trim();
+  const msgEl = document.getElementById('descEditMsg');
+  msgEl.style.display = 'none';
+
+  const currentUser = getCurrentUser();
+  if (!currentUser || !channelObj || currentUser.id !== channelObj.created_by) {
+    msgEl.textContent = 'You are not the channel creator.';
+    msgEl.style.display = 'block';
+    return;
+  }
+
+  const { error } = await client.from('channels').update({ description: txt }).eq('id', channelObj.id);
+  if (error) { msgEl.textContent = error.message || 'Failed to update description.'; msgEl.style.display = 'block'; return; }
+
+  channelObj.description = txt;
+  document.getElementById('infoDesc').textContent = txt || '(no description)';
+  document.getElementById('channelHeadlineMeta').textContent = `Created by ${channelCreatorProfile ? escapeHtml(channelCreatorProfile.username) : 'unknown'}`;
+  cancelEditDescription();
+  await loadChannels();
+}
+
+/* Banner editor */
+function enableEditBanner() {
+  document.getElementById('bannerEditor').style.display = 'block';
+  document.getElementById('bannerEditMsg').style.display = 'none';
+  document.getElementById('editBannerUrl').value = channelObj.banner_url || '';
+}
+function cancelEditBanner() {
+  document.getElementById('bannerEditor').style.display = 'none';
+  document.getElementById('bannerEditMsg').style.display = 'none';
+}
+async function saveBanner() {
+  const url = document.getElementById('editBannerUrl').value.trim();
+  const msgEl = document.getElementById('bannerEditMsg');
+  msgEl.style.display = 'none';
+
+  const currentUser = getCurrentUser();
+  if (!currentUser || !channelObj || currentUser.id !== channelObj.created_by) {
+    msgEl.textContent = 'You are not the channel creator.';
+    msgEl.style.display = 'block';
+    return;
+  }
+
+  const { error } = await client.from('channels').update({ banner_url: url || null }).eq('id', channelObj.id);
+  if (error) { msgEl.textContent = error.message || 'Failed to update banner.'; msgEl.style.display = 'block'; return; }
+
+  channelObj.banner_url = url || null;
+  cancelEditBanner();
+
+  // Refresh banner display
+  const bannerTop = document.getElementById('channelBannerTop');
+  const bannerTopImg = document.getElementById('channelBannerTopImg');
+  const bannerDiv = document.getElementById('channelBanner');
+  const bannerImg = document.getElementById('channelBannerImg');
+  if (channelObj.banner_url && String(channelObj.banner_url).trim() !== '') {
+    bannerTopImg.src = channelObj.banner_url;
+    bannerTop.style.display = 'block';
+    bannerImg.src = channelObj.banner_url;
+    bannerDiv.style.display = 'block';
+  } else {
+    bannerTop.style.display = 'none';
+    bannerDiv.style.display = 'none';
+  }
+
+  await loadChannels();
+}
+
+/* Icon editor */
+function enableEditIcon() {
+  document.getElementById('iconEditor').style.display = 'block';
+  document.getElementById('iconEditMsg').style.display = 'none';
+  document.getElementById('editIconUrl').value = channelObj.icon_url || '';
+}
+function cancelEditIcon() {
+  document.getElementById('iconEditor').style.display = 'none';
+  document.getElementById('iconEditMsg').style.display = 'none';
+}
+async function saveIcon() {
+  const url = document.getElementById('editIconUrl').value.trim();
+  const msgEl = document.getElementById('iconEditMsg');
+  msgEl.style.display = 'none';
+
+  const currentUser = getCurrentUser();
+  if (!currentUser || !channelObj || currentUser.id !== channelObj.created_by) {
+    msgEl.textContent = 'You are not the channel creator.';
+    msgEl.style.display = 'block';
+    return;
+  }
+
+  const { error } = await client.from('channels').update({ icon_url: url || null }).eq('id', channelObj.id);
+  if (error) { msgEl.textContent = error.message || 'Failed to update icon.'; msgEl.style.display = 'block'; return; }
+
+  channelObj.icon_url = url || null;
+  cancelEditIcon();
+
+  // Refresh icon display (heading + sidebar)
+  const iconHead = document.getElementById('channelIconImg');
+  const iconSide = document.getElementById('channelIconSidebar');
+  if (channelObj.icon_url && String(channelObj.icon_url).trim() !== '') {
+    iconHead.src = channelObj.icon_url;
+    iconHead.style.display = 'block';
+    iconSide.src = channelObj.icon_url;
+    iconSide.style.display = 'inline-block';
+  } else {
+    iconHead.style.display = 'none';
+    iconSide.style.display = 'none';
+  }
+
+  await loadChannels();
+}
+
+/* ----------------------------
+   FOLLOW / UNFOLLOW
+----------------------------- */
+async function loadFollowState() {
+  if (!channelObj) { updateFollowUI(null, false, 0); return; }
+
+  const { data: follows, error: fErr } = await client
+    .from('channel_follows')
+    .select('*')
+    .eq('channel_id', channelObj.id);
+
+  if (fErr) { console.warn('Failed to load follows', fErr); updateFollowUI(null, false, 0); return; }
+
+  const count = (follows || []).length;
+  const currentUser = getCurrentUser();
+  const isFollowing = currentUser ? (follows || []).some(f => String(f.user_id) === String(currentUser.id)) : false;
+  updateFollowUI(channelObj.id, isFollowing, count);
+}
+
+function updateFollowUI(cid, isFollowing, count) {
+  const meta = document.getElementById('channelHeadlineMeta');
+  const followWrapperHtml = `
+    <div id="followMeta" style="display:flex; gap:10px; align-items:center; margin-left:10px;">
+      <div style="font-size:12px; color:#666;">Followers</div>
+      <div id="followCountHeadline" style="font-weight:700;">${count ?? 0}</div>
+      <div id="followBtnContainer"></div>
+    </div>
+  `;
+  const existing = meta.innerHTML.split('<div id="followMeta"')[0] || meta.innerHTML;
+  meta.innerHTML = existing + followWrapperHtml;
+
+  const followerCountEl = document.getElementById('followerCount');
+  if (followerCountEl) followerCountEl.textContent = count ?? 0;
+
+  const followBtnSidebar = document.getElementById('followBtnSidebar');
+  const followBtnContainer = document.getElementById('followBtnContainer');
+
+  if (!cid) {
+    if (followBtnSidebar) followBtnSidebar.style.display = 'none';
+    if (followBtnContainer) followBtnContainer.innerHTML = '';
+    return;
+  }
+
+  const currentUser = getCurrentUser();
+  if (!currentUser) {
+    if (followBtnSidebar) {
+      followBtnSidebar.style.display = 'inline-block';
+      followBtnSidebar.textContent = 'Sign in to follow';
+      followBtnSidebar.onclick = () => window.location.href = 'signin.html';
+      followBtnSidebar.className = 'followBtn';
+    }
+    if (followBtnContainer) followBtnContainer.innerHTML = `<button class="followBtn" onclick="window.location.href='signin.html'">Sign in to follow</button>`;
+    return;
+  }
+
+  if (isFollowing) {
+    if (followBtnSidebar) {
+      followBtnSidebar.style.display = 'inline-block';
+      followBtnSidebar.textContent = 'Unfollow';
+      followBtnSidebar.className = 'unfollowBtn';
+      followBtnSidebar.onclick = unfollowFromSidebar;
+    }
+    if (followBtnContainer) followBtnContainer.innerHTML = `<button class="unfollowBtn" onclick="unfollowFromHeadline()">Unfollow</button>`;
+  } else {
+    if (followBtnSidebar) {
+      followBtnSidebar.style.display = 'inline-block';
+      followBtnSidebar.textContent = 'Follow';
+      followBtnSidebar.className = 'followBtn';
+      followBtnSidebar.onclick = followFromSidebar;
+    }
+    if (followBtnContainer) followBtnContainer.innerHTML = `<button class="followBtn" onclick="followFromHeadline()">Follow</button>`;
+  }
+}
+
+async function toggleFollowFromSidebar() {
+  const currentUser = getCurrentUser();
+  if (!currentUser) return window.location.href = 'signin.html';
+  const { data } = await client.from('channel_follows').select('*').eq('channel_id', channelObj.id).eq('user_id', currentUser.id).maybeSingle();
+  if (data) await unfollowChannel(); else await followChannel();
+}
+async function followFromSidebar() { await followChannel(); }
+async function followFromHeadline() { await followChannel(); }
+async function unfollowFromSidebar() { await unfollowChannel(); }
+async function unfollowFromHeadline() { await unfollowChannel(); }
+
+async function followChannel() {
+  const currentUser = getCurrentUser();
+  if (!currentUser) return alert('Sign in first.');
+  try {
+    const { error: insertErr } = await client
+      .from('channel_follows')
+      .insert([{ channel_id: channelObj.id, user_id: currentUser.id, created_at: Date.now() }]);
+    if (insertErr && !insertErr.code) { showError('Failed to follow: ' + insertErr.message); return; }
+  } catch (e) { console.warn('follow error', e); }
+  await loadFollowState();
+  await loadChannels();
+}
+
+async function unfollowChannel() {
+  const currentUser = getCurrentUser();
+  if (!currentUser) return alert('Sign in first.');
+  const { error } = await client
+    .from('channel_follows')
+    .delete()
+    .eq('channel_id', channelObj.id)
+    .eq('user_id', currentUser.id);
+  if (error) { showError('Failed to unfollow: ' + error.message); return; }
+  await loadFollowState();
+  await loadChannels();
+}
+
+/* ----------------------------
+   POSTS (channel-scoped) with sorting, comment counts
+----------------------------- */
+function hotScore(post) {
+  const s = (Number(post.uptoes) || 0) - (Number(post.downtoes) || 0);
+  const order = Math.log10(Math.max(Math.abs(s), 1));
+  const sign = s > 0 ? 1 : s < 0 ? -1 : 0;
+  const age_seconds = ((Number(post.timestamp) || 0) / 1000) - 1134028003;
+  return sign * order + age_seconds / 45000;
+}
+
+async function loadPosts() {
+  showError('');
+  const postsDiv = document.getElementById('posts');
+  postsDiv.textContent = 'Loading…';
+
+  if (!channelId) { postsDiv.textContent = 'No channel selected.'; return; }
+
+  const [{ data: posts, error: postErr }, { data: profiles }] = await Promise.all([
+    client.from('messages').select('*').eq('channel_id', channelId),
+    client.from('profiles').select('*')
+  ]);
+
+  if (postErr) { postsDiv.textContent = 'Failed to load posts.'; console.warn(postErr); return; }
+
+  const postsArr = posts || [];
+  const profileMap = {};
+  (profiles || []).forEach(p => profileMap[p.user_id] = p);
+
+  // comment counts
+  let commentMap = {};
+  const postIds = postsArr.map(p => p.id).filter(Boolean);
+  if (postIds.length > 0) {
+    const { data: comments } = await client.from('comments').select('post_id').in('post_id', postIds);
+    (comments || []).forEach(c => commentMap[c.post_id] = (commentMap[c.post_id] || 0) + 1);
+  }
+
+  // pinned separation
+  const adminPinned = postsArr.filter(p => p.global_pinned);
+  const channelPinned = postsArr.filter(p => !p.global_pinned && p.pinned);
+  let normal = postsArr.filter(p => !p.global_pinned && !p.pinned);
+
+  // sorting
+  if (currentSort === 'new') {
+    normal.sort((a,b) => (Number(b.timestamp)||0) - (Number(a.timestamp)||0));
+  } else if (currentSort === 'hot') {
+    normal.forEach(p => p._hot = hotScore(p));
+    normal.sort((a,b) => (b._hot||0) - (a._hot||0));
+  } else if (currentSort === 'comments') {
+    normal.sort((a,b) => (commentMap[b.id]||0) - (commentMap[a.id]||0));
+  } else if (currentSort === 'top') {
+    let cutoff = 0;
+    const now = Date.now();
+    if (currentTimeframe === 'day') cutoff = now - 86400000;
+    else if (currentTimeframe === 'week') cutoff = now - 604800000;
+    else if (currentTimeframe === 'month') cutoff = now - 2592000000;
+    else if (currentTimeframe === 'year') cutoff = now - 31536000000;
+    const filtered = currentTimeframe === 'all' ? normal : normal.filter(p => (Number(p.timestamp)||0) >= cutoff);
+    filtered.sort((a,b) => ((Number(b.uptoes)||0)-(Number(b.downtoes)||0)) - ((Number(a.uptoes)||0)-(Number(a.downtoes)||0)));
+    normal = filtered;
+  }
+
+  const sorted = [...adminPinned, ...channelPinned, ...normal];
+
+  // render
+  postsDiv.innerHTML = '';
+  if (sorted.length === 0) { postsDiv.textContent = 'No posts in this channel yet.'; return; }
+
+  sorted.forEach(post => {
+    const p = profileMap[post.user_id] || {};
+    const pfp = p.avatar_url || 'https://via.placeholder.com/34';
+    const username = p.username || 'unknown';
+    const content = detectLinks(post.body);
+    const pinnedHtml = post.global_pinned ? `<span class="adminPinnedBadge">ADMIN PINNED</span>` : (post.pinned ? `<span class="pinnedBadge">Pinned</span>` : '');
+    const lockedNotice = post.locked ? `<div style="color:#c0392b; margin-top:8px; font-weight:bold;">Thread locked — comments disabled</div>` : '';
+
+    let adminButtons = '';
+    if (currentProfile?.is_admin && adminMode) {
+      adminButtons += `<button class="smallBtn danger" onclick="adminDeletePost('${post.id}')">Admin Delete</button> `;
+      adminButtons += `<button class="pinBtn smallBtn" onclick="adminToggleGlobalPin('${post.id}', ${!post.global_pinned})">${post.global_pinned ? 'Unpin (Global)' : 'Pin (Global)'}</button> `;
+      adminButtons += `<button class="lockBtn smallBtn" onclick="adminLockPost('${post.id}', ${!post.locked})">${post.locked ? 'Unlock' : 'Lock'}</button>`;
+    }
+
+    const div = document.createElement('div');
+    div.className = 'post';
+    div.innerHTML = `
+      <div class="postHeader">
+        <img class="pfp" src="${escapeHtml(pfp)}" alt="avatar">
+        <div style="flex:1">
+          <div style="font-size:20px; font-weight:bold;">
+            <a href="post.html?id=${post.id}">${escapeHtml(post.title)}</a>
+            ${pinnedHtml}
+          </div>
+          <div style="color:#666;">
+            <a href="profile.html?id=${post.user_id}">${escapeHtml(username)}</a>
+            ${currentProfile && currentProfile.is_admin ? '<span class="adminBadge">Admin</span>' : ''}
+            <span class="metaSmall">• ${new Date(Number(post.timestamp)||0).toLocaleString()}</span>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:10px;">${content}</div>
+
+      ${lockedNotice}
+
+      <div class="voteBox">
+        <button class="voteBtn" onclick="vote('${post.id}','up')">👍 Uptoe</button>
+        <span id="post_uptoes_${post.id}">${post.uptoes ?? 0}</span>
+        <button class="voteBtn" onclick="vote('${post.id}','down')">👎 Downtoe</button>
+        <span id="post_downtoes_${post.id}">${post.downtoes ?? 0}</span>
+
+        <span style="margin-left:auto;">${adminButtons}</span>
+      </div>
+    `;
+    postsDiv.appendChild(div);
+  });
+}
+
+/* ----------------------------
+   CREATE POST (like index.html)
+----------------------------- */
+async function createPostInChannel() {
+  const user = getCurrentUser();
+  if (!user) return alert('You must sign in.');
+  await fetchCurrentProfile();
+  if (currentProfile?.banned) return alert('You are banned and cannot create posts.');
+
+  const title = document.getElementById('title').value.trim();
+  const body = document.getElementById('body').value.trim();
+  if (!title || !body) return alert('Missing fields.');
+
+  const { error } = await client.from('messages').insert([{
+    title,
+    body,
+    user_id: user.id,
+    timestamp: Date.now(),
+    uptoes: 0,
+    downtoes: 0,
+    voters: [],
+    channel_id: channelId
+  }]);
+
+  if (error) { showError('Failed to create post: ' + (error.message || error)); return; }
+
+  document.getElementById('title').value = '';
+  document.getElementById('body').value = '';
+
+  await loadChannels();
+  await loadPosts();
+}
+
+/* ----------------------------
+   VOTE helper
+----------------------------- */
+async function vote(postId, type) {
+  const user = getCurrentUser();
+  if (!user) return alert('Sign in first.');
+  await fetchCurrentProfile();
+  if (currentProfile?.banned) return alert('You are banned and cannot vote.');
+
+  const { data: post } = await client.from('messages').select('*').eq('id', postId).maybeSingle();
+  if (!post) { showError('Post not found.'); return; }
+
+  let voters = post.voters || [];
+  let up = Number(post.uptoes) || 0;
+  let down = Number(post.downtoes) || 0;
+  const idx = voters.findIndex(v => v.user_id === user.id);
+
+  if (idx >= 0 && voters[idx].vote === type) {
+    voters.splice(idx,1);
+    if (type === 'up') up = Math.max(0, up-1); else down = Math.max(0, down-1);
+  } else {
+    if (idx >= 0) {
+      const prev = voters[idx].vote;
+      if (prev === 'up') up = Math.max(0, up-1); else down = Math.max(0, down-1);
+      voters.splice(idx,1);
+    }
+    voters.push({ user_id: user.id, vote: type });
+    if (type === 'up') up++; else down++;
+  }
+
+  await client.from('messages').update({ voters, uptoes: up, downtoes: down }).eq('id', postId);
+
+  const upEl = document.getElementById(`post_uptoes_${postId}`);
+  const downEl = document.getElementById(`post_downtoes_${postId}`);
+  if (upEl) upEl.textContent = up;
+  if (downEl) downEl.textContent = down;
+
+  await loadPosts();
+}
+
+/* ----------------------------
+   ADMIN ACTIONS
+----------------------------- */
+async function adminDeletePost(postId) {
+  if (!currentProfile?.is_admin || !adminMode) return alert('Admin mode required.');
+  if (!confirm('Admin: delete this post (and its comments)?')) return false;
+  const { error: delCommentsErr } = await client.from('comments').delete().eq('post_id', postId);
+  if (delCommentsErr) { showError('Failed to delete comments: ' + delCommentsErr.message); return false; }
+  const { error: delPostErr } = await client.from('messages').delete().eq('id', postId);
+  if (delPostErr) { showError('Failed to delete post: ' + delPostErr.message); return false; }
+  await loadChannels();
+  await loadPosts();
+  return true;
+}
+async function adminToggleGlobalPin(postId, value) {
+  if (!currentProfile?.is_admin || !adminMode) return alert('Admin mode required.');
+  const { error } = await client.from('messages').update({ global_pinned: value }).eq('id', postId);
+  if (error) { showError('Failed to update global pinned: ' + error.message); return false; }
+  await loadPosts();
+  return true;
+}
+async function adminLockPost(postId, value) {
+  if (!currentProfile?.is_admin || !adminMode) return alert('Admin mode required.');
+  const { error } = await client.from('messages').update({ locked: value }).eq('id', postId);
+  if (error) { showError('Failed to update locked: ' + error.message); return false; }
+  await loadPosts();
+  return true;
+}
+
+/* ----------------------------
+   SORT HANDLERS
+----------------------------- */
+function setSort(type) {
+  currentSort = type;
+  localStorage.setItem('sort_mode', currentSort);
+  if (type === 'top') document.getElementById('timeframeBox').style.display = 'inline-block';
+  else document.getElementById('timeframeBox').style.display = 'none';
+  loadPosts();
+}
+function saveTimeframeAndReload() {
+  const tf = document.getElementById('timeframe').value;
+  currentTimeframe = tf;
+  localStorage.setItem('top_timeframe', tf);
+  loadPosts();
+}
+
+/* ----------------------------
+   INIT
+----------------------------- */
+async function init() {
+  document.getElementById('timeframe').value = currentTimeframe || 'all';
+  if (currentSort === 'top') document.getElementById('timeframeBox').style.display = 'inline-block';
+
+  await loadUserStatus();
+  await loadChannels();
+  await loadChannel();
+  await loadPosts();
+
+  window.loadPosts = loadPosts;
+  window.setSort = setSort;
+}
+init();
+</script>
+
+</script>
+<script src="theme.js" defer></script>
+<script>
+(function() {
+  // 1. READ SETTINGS
+  const mode = localStorage.getItem('theme_bg_preference') || 'particles';
+  const fontData = localStorage.getItem('custom_font_data');
+
+  // 2. APPLY BACKGROUND
+  const particles = document.getElementById('bgParticles');
+  const waves = document.getElementById('pspWaves');
+
+  if (mode === 'waves') {
+    document.body.classList.add('mode-waves');
+    if(particles) particles.style.display = 'none';
+    if(waves) waves.style.display = 'block';
+  } else {
+    document.body.classList.remove('mode-waves');
+    if(particles) particles.style.display = 'block';
+    if(waves) waves.style.display = 'none';
+  }
+
+  // 3. APPLY FONT
+  if (fontData) {
+    try {
+      const fontFace = new FontFace('CustomUserFont', `url(${fontData})`);
+      fontFace.load().then(f => {
+        document.fonts.add(f);
+        document.documentElement.style.setProperty('--font-main', 'CustomUserFont, system-ui, sans-serif');
+      });
+    } catch(e) { console.log('Font load error'); }
+  }
+})();
+</script>
+</body>
+</html>

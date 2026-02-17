@@ -1,0 +1,119 @@
+if (card.name === 'Tetanus') {
+            const nerdList = ['Luke', 'Matthew', 'Previous Owner', 'Carve', 'Dusty', 'DinoShark'];
+            let added = [];
+            for(let i=0; i<2; i++) {
+                const randomName = nerdList[Math.floor(Math.random() * nerdList.length)];
+                const nerdCard = allCards.find(c => c.name === randomName);
+                if (nerdCard) {
+                    me.hand.push(nerdCard);
+                    added.push(nerdCard.name);
+                }
+            }
+            log += ` Summoned ${added.join(' & ')}!`;
+        }
+        else if (card.name === 'Dusty') { me.shield += card.value; log += ` Gained ${card.value} Shield.`; }
+        else if (card.name === 'DinoShark') { me.shield += card.value; log += ` Gained ${card.value} Shield.`; }
+        else if (card.name === 'ChatGPT') { me.buffs.push('AI Boost'); log += ` AI LOADING... Next attack x2 Damage.`; }
+        else if (card.name === 'IT') {
+            applyDamage(3);
+            if (opp.hand.length > 0) {
+                const validTargets = opp.hand.filter(c => c.name !== 'Luke');
+                if (validTargets.length > 0) {
+                    const randomCard = validTargets[Math.floor(Math.random() * validTargets.length)];
+                    if (!opp.locked_card_names.includes(randomCard.name)) {
+                        opp.locked_card_names.push(randomCard.name);
+                        log += ` LOCKED all '${randomCard.name}' cards!`;
+                    }
+                } else {
+                    log += ` (No lockable cards found)`;
+                }
+            }
+        }
+        else if (card.name === 'Luke') {
+            if (me.locked_card_names.length > 0) { me.locked_card_names = []; log += ` UNLOCKED all cards!`; }
+            const enemyHasIt = opp.deck.some(c => c.name === 'IT') || opp.hand.some(c => c.name === 'IT');
+            let dmg = 5;
+            if (enemyHasIt) { dmg *= 2; log += ` CRIT (Enemy has IT)!`; }
+            applyDamage(dmg);
+        }
+        else if (card.name === 'Justin') {
+            if (opp.buffs.length > 0) {
+                const stolenBuffs = [...opp.buffs];
+                me.buffs.push(...stolenBuffs);      
+                opp.buffs = [];                     
+                log += ` Stole active buffs: ${stolenBuffs.join(', ')}!`;
+            } else {
+                log += ` Justin checked for buffs, but found nothing to steal.`;
+            }
+        }
+        else if (card.name === 'Actual Tetanus') {
+            opp.buffs.push('Tetanus Poison');
+            log += ` Infected opponent with Tetanus Poison (3 dmg/turn).`;
+        }
+        else if (card.name === 'School Nurse') {
+            let cleansed = [];
+            if (me.buffs.includes('Tetanus Poison')) {
+                me.buffs = me.buffs.filter(b => b !== 'Tetanus Poison');
+                cleansed.push("Tetanus");
+            }
+            if (me.is_stunned) { 
+                me.is_stunned = false; 
+                cleansed.push("Stun"); 
+            }
+            if (me.locked_card_names.length > 0) { 
+                me.locked_card_names = []; 
+                cleansed.push("Locks"); 
+            }
+            if (me.buffs.includes('Matthew Curse')) {
+                me.buffs = me.buffs.filter(b => b !== 'Matthew Curse');
+                cleansed.push("Curse");
+            }
+
+            if (cleansed.length > 0) {
+                log += ` Cleansed: ${cleansed.join(', ')}.`;
+            } else {
+                log += ` Applied bandage (no debuffs found).`;
+            }
+
+            const icePack = {
+                id: 'ice-pack-temp',
+                name: 'Ice Pack',
+                cost: 1, 
+                description: 'Takes up space. Play to discard.',
+                image_url: 'https://placehold.co/100x140/87CEEB/white?text=Ice',
+                type: 'Junk',
+                value: 0
+            };
+
+            me.hand.push(icePack);
+            me.hand.push(icePack);
+            log += ` Received 2 Ice Packs.`;
+        }
+        else if (card.name === 'Matthew') { if (!opp.buffs.includes('Matthew Curse')) { opp.buffs.push('Matthew Curse'); log += ` Cursed opponent (20% miss).`; } }
+        else if (card.name === 'Fun Friday!') { opp.is_stunned = true; log += ` Opponent STUNNED next turn.`; }
+        else if (card.name === 'Carve') {
+            let dmg = card.value;
+            if (me.buffs.includes('Previous Owner')) { dmg *= 2; me.buffs = me.buffs.filter(b => b !== 'Previous Owner'); log += ` (Previous Owner Buff)`; }
+            applyDamage(dmg);
+        }
+        else if (card.name === 'Previous Owner') { me.buffs.push('Previous Owner'); }
+        else if (card.name === 'Ms. Norris') { 
+            // Ensure array exists to prevent crashes
+            if (!opp.banned_cards) opp.banned_cards = [];
+
+            if (opp.hand.length > 0) {
+                // 1. Pick a random card from opponent's hand
+                const rIdx = Math.floor(Math.random() * opp.hand.length);
+                const victimCard = opp.hand[rIdx];
+                
+                // 2. Add to banned list
+                opp.banned_cards.push(victimCard.name);
+                
+                // 3. Remove it from their hand immediately
+                opp.hand.splice(rIdx, 1);
+
+                log += ` Ms. Norris snatched ${victimCard.name} from hand! They can never draw it again!`; 
+            } else {
+                log += ` Ms. Norris hissed (Enemy hand empty)!`;
+            }
+        }

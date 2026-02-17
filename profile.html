@@ -1,0 +1,1467 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>User Profile</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="shortcut icon" href="logo.png" type="image/x-icon">
+  <script>
+    // Provide a safe localStorage proxy for environments that block access.
+    // IMPORTANT: do not override native `window.localStorage` — that breaks
+    // third-party libs (e.g. Supabase) that rely on real localStorage behavior.
+    (function(){
+      function createSafeStorage() {
+        const mem = Object.create(null);
+        return {
+          getItem(key) { try { return window.localStorage.getItem(key); } catch (e) { return (key in mem) ? mem[key] : null; } },
+          setItem(key, value) { try { window.localStorage.setItem(key, value); } catch (e) { mem[key] = String(value); } },
+          removeItem(key) { try { window.localStorage.removeItem(key); } catch (e) { delete mem[key]; } },
+          clear() { try { window.localStorage.clear(); } catch (e) { for (const k in mem) delete mem[k]; } }
+        };
+      }
+      window.__safeLocalStorage = window.__safeLocalStorage || createSafeStorage();
+    })();
+  </script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    /* Global Font Var */
+    :root { --font-main: system-ui, -apple-system, sans-serif; }
+    body { font-family: var(--font-main); }
+
+    /* Profile tweaks that complement styles.css */
+    .top-links { margin-bottom: 20px; display:flex; gap:15px; align-items:center; }
+    .profile-header { display:flex; gap:16px; align-items:center; margin-top:12px; margin-bottom:8px; }
+    .profile-header .avatar { width:96px; height:96px; font-size:36px; }
+
+    .flex { display:flex; align-items:center; }
+    .sectionTitle { font-size:20px; font-weight:700; margin-top:30px; margin-bottom:10px; color:var(--text); }
+
+    /* Posts & comments use global card styles */
+    .post, .comment { background:var(--card); border:1px solid var(--border); padding:12px; border-radius:12px; margin-bottom:12px; color:var(--text); }
+    .post-title { font-size:18px; font-weight:600; margin:0 0 6px 0; }
+    .post-meta, .metaSmall { color:var(--muted); font-size:12px; }
+
+    /* Bio box — use global card look */
+    #bioBox { margin-top:15px; padding:14px; background:var(--card); border-radius:var(--radius); border:1px solid var(--border); color:var(--text); }
+
+    .badges { margin-top:10px; display:flex; gap:8px; flex-wrap:wrap; }
+    .badge { background:var(--card); border:1px solid var(--border); padding:6px 8px; border-radius:8px; color:var(--text); }
+    .follow-stats a { color:var(--muted); margin-right:12px; }
+
+    .pin-btn { margin-top:6px; background:var(--accent); border:none; padding:6px 10px; border-radius:8px; color:#fff; cursor:pointer; font-size:13px; }
+
+    /* Notifications dropdown */
+    .notif-controls { display:none; align-items:center; gap:8px; }
+    .btn-small { padding:6px 10px; border-radius:8px; border:1px solid var(--border); background:var(--card); color:var(--text); cursor:pointer; }
+    .dropdown-content { position:absolute; right:0; margin-top:6px; background:var(--card); border:1px solid var(--border); border-radius:8px; padding:10px; min-width:320px; z-index:1000; box-shadow:var(--shadow); }
+
+    .notif-list { margin-top:12px; max-width:900px; border:1px solid var(--border); border-radius:8px; background:var(--card); padding:6px; color:var(--text); }
+    .notif-item { display:flex; gap:10px; padding:10px; border-bottom:1px solid var(--border); }
+    .notif-item:last-child { border-bottom:none; }
+    .notif-item .left { width:40px; height:40px; border-radius:50%; background:linear-gradient(135deg,var(--accent),var(--accent-2)); display:flex; align-items:center; justify-content:center; font-weight:bold; color:#fff; }
+    .notif-item .meta { color:var(--muted); font-size:12px; margin-top:6px; }
+    .notif-badge { background:var(--danger); color:#fff; border-radius:12px; padding:4px 8px; font-weight:bold; margin-left:8px; font-size:12px; }
+
+    .muted { opacity:.55; }
+
+    /* mutual followers */
+    .mutualGrid { display:flex; gap:10px; flex-wrap:wrap; margin-top:8px; }
+    .mutualItem { display:flex; gap:8px; align-items:center; padding:6px; border-radius:8px; background:var(--card); border:1px solid var(--border); color:var(--text); }
+
+    /* THEME MODAL */
+    .theme-modal { position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:9999; display:none; align-items:center; justify-content:center; backdrop-filter:blur(3px); }
+    .theme-content { background:var(--card); border:1px solid var(--border); padding:24px; border-radius:16px; width:90%; max-width:420px; color:var(--text); box-shadow:var(--shadow); animation: fadeIn 0.2s ease; }
+    .theme-row { margin-bottom:20px; }
+    .theme-row label { display:block; margin-bottom:8px; font-weight:600; font-size:14px; }
+    .file-upload-btn { display:inline-block; padding:8px 16px; background:var(--accent); color:#fff; border-radius:8px; cursor:pointer; font-size:14px; text-align:center; transition:opacity 0.2s; }
+    .file-upload-btn:hover { opacity:0.9; }
+    .file-name { margin-left:10px; font-size:13px; color:var(--muted); }
+    
+    @keyframes fadeIn { from { opacity:0; transform:scale(0.95); } to { opacity:1; transform:scale(1); } }
+
+    @media (max-width:760px) {
+      .flex { flex-direction:column; align-items:flex-start; gap:10px; }
+      .profile-header .avatar { width:64px; height:64px; }
+    }
+    /* make profile a bit wider */
+    body.profile-wide { max-width: 1200px; }
+    /* Responsive images */
+    #profileBannerImg, #profileBanner img { width:100%; height:auto; max-height:360px; object-fit:cover; display:block; border-radius:12px; }
+    .profile-header .avatar { overflow:hidden; }
+    .profile-header .avatar img { width:100%; height:100%; object-fit:cover; display:block; border-radius:50%; }
+    .embedded-image { margin-top:8px; }
+    .auto-image { max-width:100%; height:auto; border-radius:8px; display:block; }
+    .mutualItem img { width:28px; height:28px; object-fit:cover; border-radius:6px; }
+  </style>
+</head>
+<body class="profile-wide">
+  <canvas id="bgParticles"></canvas>
+
+<div id="pspWaves" class="wave-container">
+  <div class="wave"></div>
+  <div class="wave"></div>
+</div>
+
+  <script src="particles.js" defer></script>
+
+<div id="error"></div>
+
+<div id="themeModal" class="theme-modal">
+  <div class="theme-content">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+      <h3 style="margin:0;">Theme Settings</h3>
+      <button id="closeThemeBtn" style="background:none; border:none; color:var(--muted); font-size:20px; cursor:pointer;">&times;</button>
+    </div>
+    
+    <div class="theme-row">
+      <label>Background Style</label>
+      <select id="bgSelect" class="btn-small" style="width:100%; padding:8px;">
+        <option value="particles">Particles (Default)</option>
+        <option value="waves">PSP Waves</option>
+      </select>
+    </div>
+
+    <div class="theme-row">
+      <label>Custom Font (.woff2, .ttf)</label>
+      <div style="display:flex; align-items:center;">
+        <input type="file" id="fontInput" accept=".woff2,.woff,.ttf,.otf" style="display:none">
+        <label for="fontInput" class="file-upload-btn">📂 Upload Font</label>
+        <span id="fontNameDisplay" class="file-name">No file selected</span>
+      </div>
+      <div style="text-align:right; margin-top:5px;">
+        <button id="resetFontBtn" style="color:red; background:none; border:none; cursor:pointer; font-size:12px;">Reset Font</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function() {
+  const safeStore = window.localStorage; // Using standard localStorage
+  const BG_KEY = 'theme_bg_preference';
+  const FONT_KEY = 'custom_font_data';
+  const FONT_NAME_KEY = 'custom_font_name';
+
+  // --- CORE FUNCTION: Apply Background ---
+  // This runs immediately to prevent "flickering" on page load
+  function applyBackground(mode) {
+    const particles = document.getElementById('bgParticles');
+    const waves = document.getElementById('pspWaves');
+    
+    // We use a body class to handle CSS toggling globally
+    if (mode === 'waves') {
+      document.body.classList.add('mode-waves');
+      // Explicitly hide/show just in case CSS misses it
+      if(particles) particles.style.display = 'none';
+      if(waves) waves.style.display = 'block';
+    } else {
+      document.body.classList.remove('mode-waves');
+      if(particles) particles.style.display = 'block';
+      if(waves) waves.style.display = 'none';
+    }
+  }
+
+  // --- CORE FUNCTION: Apply Font ---
+  function loadSavedFont() {
+    const fontData = safeStore.getItem(FONT_KEY);
+    const fontName = safeStore.getItem(FONT_NAME_KEY);
+    
+    if (fontData) {
+      try {
+        const fontFace = new FontFace('CustomUserFont', `url(${fontData})`);
+        fontFace.load().then(f => {
+          document.fonts.add(f);
+          document.documentElement.style.setProperty('--font-main', 'CustomUserFont, system-ui, sans-serif');
+          
+          // Update UI if modal is open
+          const nameDisplay = document.getElementById('fontNameDisplay');
+          if (nameDisplay && fontName) nameDisplay.textContent = fontName;
+        });
+      } catch (e) { console.error('Font error:', e); }
+    }
+  }
+
+  // --- INITIALIZE ON PAGE LOAD ---
+  // 1. Read Storage
+  const savedBg = safeStore.getItem(BG_KEY) || 'particles';
+  
+  // 2. Apply immediately
+  applyBackground(savedBg);
+  loadSavedFont();
+
+  // 3. Setup Event Listeners (Wait for DOM)
+  window.addEventListener('DOMContentLoaded', () => {
+    
+    // Re-run apply in case DOM elements weren't ready during initial run
+    applyBackground(savedBg);
+
+    const modal = document.getElementById('themeModal');
+    const openBtn = document.getElementById('themeBtn'); // Your main button to open settings
+    const closeBtn = document.getElementById('closeThemeBtn');
+    const bgSelect = document.getElementById('bgSelect');
+    
+    // Sync Dropdown with current state
+    if (bgSelect) bgSelect.value = savedBg;
+
+    // Handle Dropdown Change
+    if (bgSelect) {
+      bgSelect.addEventListener('change', (e) => {
+        const val = e.target.value;
+        applyBackground(val);        // Change look immediately
+        safeStore.setItem(BG_KEY, val); // Save for other pages
+      });
+    }
+
+    // Modal Logic
+    window.toggleThemeModal = (show) => {
+      if(modal) modal.style.display = show ? 'flex' : 'none';
+    };
+
+    if (closeBtn) closeBtn.onclick = () => window.toggleThemeModal(false);
+    if (openBtn) openBtn.onclick = () => window.toggleThemeModal(true);
+    if (modal) modal.onclick = (e) => { if(e.target === modal) window.toggleThemeModal(false); };
+
+    // Font Logic (Upload)
+    const fontInput = document.getElementById('fontInput');
+    const nameDisplay = document.getElementById('fontNameDisplay');
+    const resetFontBtn = document.getElementById('resetFontBtn');
+
+    if (fontInput) {
+      fontInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        if (file.size > 4000000) { alert('File too big (Max 4MB)'); return; }
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+          safeStore.setItem(FONT_KEY, evt.target.result);
+          safeStore.setItem(FONT_NAME_KEY, file.name);
+          loadSavedFont(); // Reload font
+        };
+        reader.readAsDataURL(file);
+      });
+    }
+
+    if (resetFontBtn) {
+      resetFontBtn.onclick = () => {
+        if(confirm("Reset font?")) {
+          safeStore.removeItem(FONT_KEY);
+          safeStore.removeItem(FONT_NAME_KEY);
+          document.documentElement.style.removeProperty('--font-main');
+          if (nameDisplay) nameDisplay.textContent = 'No file selected';
+        }
+      }
+    }
+  });
+})();
+</script>
+
+<div class="main">
+  <div class="top-links">
+  <button onclick="goBack()">← Back</button>
+  <a id="inboxLink" href="inbox.html" style="display:none">📨 Inbox <span id="notifBadge" class="notif-badge" style="display:none">0</span></a>
+</div>
+  <div id="profileBanner">
+    <img id="profileBannerImg" src="" alt="Profile banner">
+  </div>
+
+  <div class="profile-header">
+    <div id="avatar" class="avatar"></div>
+    <div style="flex:1;">
+      <div style="display:flex; align-items:center; gap:12px;">
+        <h2 id="usernameTitle" style="margin:0;"></h2>
+        <div id="joinDate" class="metaSmall"></div>
+      </div>
+
+      <div class="follow-stats" style="margin-top:8px;">
+        <a id="followersLink" href="#">Followers: <span id="followersCount">0</span></a>
+        <a id="followingLink" href="#">Following: <span id="followingCount">0</span></a>
+      </div>
+
+      <div style="margin-top:12px; display:flex; gap:8px; align-items:center;">
+        <a id="editProfileBtn" href="#" class="edit-btn" style="display:none;">Edit Profile</a>
+        <button id="themeBtn" class="btn-small" style="display:none; margin-left:8px;">🎨 Theme</button>
+        <button id="followBtn" class="follow-btn" style="display:none;">Follow</button>
+        <button id="dmBtn" class="dm-btn" style="display:none;">Message</button>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="bioBox">Loading bio…
+  </div>
+  
+  <div id="badgesList" class="badges" style="margin-top:10px;"></div>
+
+  <div id="mutualSection" style="display:none; margin-top:20px;">
+    <div class="sectionTitle">Mutual Followers</div>
+    <div id="mutualFollowers" class="mutualGrid">Loading…</div>
+  </div>
+
+  <div id="notificationsSection" style="display:none; margin-top:18px;">
+    <div class="sectionTitle">Notifications</div>
+    <div class="notif-controls" id="notificationsControls" style="display:none; margin-bottom:8px;">
+      <div class="notif-dropdown">
+        <button id="notifToggleBtn" class="btn-small">⚙️ Notification settings</button>
+        <div id="notifDropdownContent" class="dropdown-content" style="display:none;">
+          <div id="notifRows">Loading toggles…</div>
+          <div class="notif-footer">
+            <span style="flex:1;">Saved locally in this browser</span>
+            <button id="resetNotifBtn" class="btn-small">Reset to defaults</button>
+            <span id="notifSaved" class="save-msg">Saved ✓</span>
+            <span id="notifSaveErr" class="save-err">Save failed</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="notifListContainer">
+      <div class="notif-list" id="notifList">Loading…</div>
+      <div style="margin-top:8px;">
+        <button id="showMoreBtn" class="btn-small" style="display:none;">Show More</button>
+        <button id="markAllReadBtn" class="btn-small" style="display:none; margin-left:8px;">Mark All Read</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="sectionTitle">Posts</div>
+  <div id="posts">Loading…</div>
+
+  <div class="sectionTitle">Comments</div>
+  <div id="comments">Loading…</div>
+
+<script>
+/* ----------------------------------
+   SUPABASE CLIENT
+----------------------------------- */
+/* SUPABASE CLIENT (singleton) */
+// Safe storage shim to handle browsers that block access (Tracking Prevention)
+function createSafeStorage() {
+  const mem = Object.create(null);
+  return {
+    getItem(key) {
+      try { return localStorage.getItem(key); } catch (e) { return (key in mem) ? mem[key] : null; }
+    },
+    setItem(key, value) {
+      try { localStorage.setItem(key, value); } catch (e) { mem[key] = String(value); }
+    },
+    removeItem(key) {
+      try { localStorage.removeItem(key); } catch (e) { delete mem[key]; }
+    },
+    clear() {
+      try { localStorage.clear(); } catch (e) { for (const k in mem) delete mem[k]; }
+    }
+  };
+}
+
+if (!window.supabaseClient) {
+  // share a safe storage implementation with the page code
+  window.__safeLocalStorage = window.__safeLocalStorage || createSafeStorage();
+  window.supabaseClient = window.supabase.createClient(
+    "https://gftohejwfjstfhkfmyjd.supabase.co",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmdG9oZWp3ZmpzdGZoa2ZteWpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMxMjk0NjgsImV4cCI6MjA3ODcwNTQ2OH0.Zq7E-xAknaZBDkCN6IecWqsDc20vTVuNt54MBWNATdY",
+    { auth: { persistSession: true, autoRefreshToken: true, storage: window.__safeLocalStorage } }
+  );
+}
+const client = window.supabaseClient;
+const safeLocalStorage = window.__safeLocalStorage || createSafeStorage();
+
+/* ----------------------------------
+   UTILITIES
+----------------------------------- */
+function showError(msg) {
+  const e = document.getElementById("error");
+  e.textContent = msg;
+  e.style.display = "block";
+  setTimeout(() => { e.style.display = "none"; }, 5000);
+}
+
+function goBack() {
+  const backTo = safeLocalStorage.getItem("back_location") || "index.html";
+  window.location.href = backTo;
+}
+
+function getLocalUser() {
+  try {
+    const id = safeLocalStorage.getItem("user_id");
+    const username = safeLocalStorage.getItem("username");
+    // Normalize and validate possible stored values (some browsers or shims may store 'null'/'undefined' strings)
+    if (!id) return null;
+    const idStr = String(id).trim();
+    if (!idStr || idStr === 'null' || idStr === 'undefined') return null;
+    if (!username) return null;
+    const usernameStr = String(username).trim();
+    if (!usernameStr || usernameStr === 'null' || usernameStr === 'undefined') return null;
+    return { id: idStr, username: usernameStr };
+  } catch (e) { return null; }
+}
+
+// Prefer Supabase auth when available; fall back to localStorage shim
+async function getSignedInUser() {
+  try {
+    if (client && client.auth && typeof client.auth.getUser === 'function') {
+      const res = await client.auth.getUser();
+      if (res && res.data && res.data.user) return res.data.user;
+    }
+  } catch (e) {
+    console.warn('getSignedInUser supabase error', e);
+  }
+  // fallback to safe shim or native localStorage (signin.html sets these keys)
+  try {
+    const shim = (typeof window.__safeLocalStorage !== 'undefined') ? window.__safeLocalStorage : null;
+    let id = shim ? shim.getItem('user_id') : null;
+    let username = shim ? shim.getItem('username') : null;
+    if (!id) {
+      try { id = window.localStorage.getItem('user_id'); } catch(e){}
+    }
+    if (!username) {
+      try { username = window.localStorage.getItem('username'); } catch(e){}
+    }
+    if (!id) return null;
+    const idStr = String(id).trim();
+    if (!idStr || idStr === 'null' || idStr === 'undefined') return null;
+    if (!username) return null;
+    const usernameStr = String(username).trim();
+    if (!usernameStr || usernameStr === 'null' || usernameStr === 'undefined') return null;
+    return { id: idStr, username: usernameStr };
+  } catch (e) {
+    return null;
+  }
+}
+
+function escapeHtml(str) {
+  if (str === null || str === undefined) return "";
+  return String(str).replaceAll("&","&amp;").replaceAll("<","&lt;").replaceAll(">","&gt;").replaceAll('"',"&quot;").replaceAll("'", "&#39;");
+}
+
+function renderContent(text) {
+  if (text === null || text === undefined) return "";
+  const escaped = escapeHtml(text);
+  const urlRegex = /(https?:\/\/[^\s]+)/g;
+  return escaped.replace(urlRegex, (url) => {
+    const lower = url.toLowerCase();
+    const isImage = lower.endsWith(".png") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") || lower.endsWith(".gif") || lower.endsWith(".webp") || lower.endsWith(".bmp") || lower.endsWith(".svg");
+    if (isImage) {
+      return `<div class="embedded-image"><a href="${url}" target="_blank" rel="noopener noreferrer"><img class="auto-image" src="${url}" alt="embedded image"></a></div>`;
+    } else {
+      return `<a href="${url}" target="_blank" rel="noopener noreferrer">${url}</a>`;
+    }
+  });
+}
+
+/* ----------------------------------
+   MENTIONS
+----------------------------------- */
+async function renderBioWithMentions(text) {
+  if (!text) return "";
+  const escaped = escapeHtml(text);
+  const mentionRegex = /@([A-Za-z0-9_]+)/g;
+  const found = [...escaped.matchAll(mentionRegex)].map(m => m[1]);
+  const unique = [...new Set(found)];
+  let result = renderContent(text);
+  if (unique.length === 0) return result;
+  try {
+    const { data: users } = await client.from("profiles").select("username, user_id").in("username", unique);
+    const map = {};
+    (users || []).forEach(u => map[u.username] = u.user_id);
+    unique.forEach(name => {
+      if (map[name]) {
+        const re = new RegExp('@' + name, 'g');
+        result = result.replace(re, `<a class="mention" href="profile.html?id=${encodeURIComponent(map[name])}">@${name}</a>`);
+      }
+    });
+  } catch (e) { console.warn('mentions', e); }
+  return result;
+}
+
+/* ----------------------------------
+   URL PARAMS
+----------------------------------- */
+const urlParams = new URLSearchParams(window.location.search);
+let profileId = urlParams.get("id");
+const profileUsernameParam = urlParams.get("username");
+
+async function resolveUsernameIfNeeded() {
+  if (!profileId && profileUsernameParam) {
+    try {
+      const { data } = await client.from("profiles")
+        .select("user_id, username")
+        .eq("username", profileUsernameParam)
+        .maybeSingle();
+      if (data) {
+        profileId = data.user_id;
+        const newUrl = new URL(window.location.href);
+        newUrl.searchParams.set('id', profileId);
+        window.history.replaceState(null, '', newUrl.toString());
+      }
+    } catch (e) { console.warn("resolveUsernameIfNeeded", e); }
+  }
+}
+
+if (!profileId && !profileUsernameParam) {
+  showError("No user ID provided.");
+}
+
+/* ----------------------------------
+   FOLLOW COUNTS
+----------------------------------- */
+async function loadFollowCounts() {
+  try {
+    const { data: followers } = await client
+      .from("follows")
+      .select("follower_id")
+      .eq("following_id", profileId);
+
+    const { data: following } = await client
+      .from("follows")
+      .select("following_id")
+      .eq("follower_id", profileId);
+
+    document.getElementById("followersCount").textContent = followers?.length || 0;
+    document.getElementById("followingCount").textContent = following?.length || 0;
+
+    document.getElementById("followersLink").href = `followers.html?id=${profileId}`;
+    document.getElementById("followingLink").href = `following.html?id=${profileId}`;
+  } catch (e) { console.warn('loadFollowCounts', e); }
+}
+
+/* ----------------------------------
+   LOAD PROFILE
+----------------------------------- */
+async function loadProfile() {
+  if (!profileId && profileUsernameParam) {
+    await resolveUsernameIfNeeded();
+  }
+
+  if (!profileId) {
+    showError("No user ID provided.");
+    return null;
+  }
+
+  const { data: profile, error: pErr } = await client
+    .from("profiles")
+    .select("user_id, username, bio, avatar_url, banner_url")
+    .eq("user_id", profileId)
+    .maybeSingle();
+
+  if (pErr || !profile) {
+    showError("Failed to load profile.");
+    return null;
+  }
+
+  // Banner
+  const bannerDiv = document.getElementById("profileBanner");
+  const bannerImg = document.getElementById("profileBannerImg");
+  if (profile.banner_url && profile.banner_url.trim() !== "") {
+    bannerImg.src = profile.banner_url;
+    bannerDiv.style.display = "block";
+  } else {
+    bannerDiv.style.display = "none";
+  }
+
+  document.getElementById("usernameTitle").textContent = profile.username;
+  
+  // -- START IDEA #15 (BADGES) INSERTION --
+  // We try to call loadBadges if it exists (it's defined in Part 2)
+  try {
+    if (typeof loadBadges === 'function') {
+      await loadBadges(profileId);
+    }
+  } catch (e) { console.warn('Badges load skipped', e); }
+  // -- END IDEA #15 --
+
+  const renderedBio = await renderBioWithMentions(profile.bio || "");
+  document.getElementById("bioBox").innerHTML = renderedBio || "No bio yet.";
+
+  const avatar = document.getElementById("avatar");
+  if (profile.avatar_url && profile.avatar_url.trim() !== "") {
+    avatar.innerHTML = `<img src="${profile.avatar_url}" alt="avatar">`;
+  } else {
+    avatar.textContent = profile.username[0]?.toUpperCase() || "?";
+  }
+
+  const { data: userMeta } = await client
+    .from("users")
+    .select("created_at")
+    .eq("id", profileId)
+    .maybeSingle();
+
+  if (userMeta?.created_at) {
+    document.getElementById("joinDate").textContent =
+      "Joined: " + new Date(userMeta.created_at).toLocaleDateString();
+  }
+
+  const viewer = await getSignedInUser();
+  const editBtn = document.getElementById("editProfileBtn");
+  const followBtn = document.getElementById("followBtn");
+  const dmBtn = document.getElementById("dmBtn");
+  const themeBtn = document.getElementById("themeBtn");
+  const inboxLink = document.getElementById('inboxLink');
+
+  const isOwner = viewer && (viewer.id === profileId);
+  // Not signed in: show follow/message as guest (redirect to signin)
+  if (!viewer) {
+    if (followBtn) { followBtn.style.display = 'inline-block'; followBtn.onclick = () => window.location.href = 'signin.html'; }
+    if (dmBtn) { dmBtn.style.display = 'inline-block'; dmBtn.onclick = () => window.location.href = 'signin.html'; }
+    return profile;
+  }
+
+  if (isOwner) {
+    if (editBtn) { editBtn.style.display = 'inline-block'; editBtn.href = `edit_profile.html?id=${profileId}`; }
+    if (themeBtn) themeBtn.style.display = 'inline-block';
+    if (inboxLink) inboxLink.style.display = 'inline-block';
+    // show notifications section only on own profile
+    const notifSec = document.getElementById("notificationsSection"); if (notifSec) notifSec.style.display = "block";
+    const notifControls = document.getElementById("notificationsControls"); if (notifControls) notifControls.style.display = "flex";
+    // wire notifications loader
+    try { await loadNotifications(viewer.id); } catch(e){}
+  } else {
+    // visitor view: show follow & DM and wire actions
+    if (followBtn) followBtn.style.display = 'inline-block';
+    if (dmBtn) dmBtn.style.display = 'inline-block';
+
+    try {
+      // use wireFollow helper to set state and handlers
+      await wireFollow(viewer, profileId);
+    } catch (e) { console.warn('follow check failed', e); }
+
+    if (dmBtn) dmBtn.onclick = () => window.location.href = `thread.html?peer=${profileId}`;
+  }
+
+  return profile;
+}
+
+/* ----------------------------------
+   FOLLOW / UNFOLLOW
+----------------------------------- */
+async function toggleFollow(me, them) {
+  const btn = document.getElementById("followBtn");
+  btn.disabled = true;
+
+  try {
+    const { data: existing } = await client
+      .from("follows")
+      .select("*")
+      .eq("follower_id", me)
+      .eq("following_id", them)
+      .maybeSingle();
+
+    if (existing) {
+      await client
+        .from("follows")
+        .delete()
+        .eq("follower_id", me)
+        .eq("following_id", them);
+
+      btn.classList.remove("following");
+      btn.textContent = "Follow";
+    } else {
+      await client
+        .from("follows")
+        .insert([{ follower_id: me, following_id: them }]);
+
+      btn.classList.add("following");
+      btn.textContent = "Following";
+    }
+
+    await loadFollowCounts();
+  } catch (e) {
+    console.warn('toggleFollow', e);
+    showError('Failed to update follow.');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+/* helper: set follow button state and handler */
+async function wireFollow(viewer, target) {
+  const btn = document.getElementById('followBtn');
+  if (!btn) return;
+  if (!viewer) {
+    btn.textContent = 'Follow';
+    btn.classList.remove('following');
+    btn.onclick = () => { window.location.href = 'signin.html'; };
+    return;
+  }
+
+  try {
+    const { data } = await client
+      .from('follows')
+      .select('*')
+      .eq('follower_id', viewer.id)
+      .eq('following_id', target)
+      .maybeSingle();
+
+    const follows = !!data;
+    btn.textContent = follows ? 'Following' : 'Follow';
+    btn.classList.toggle('following', follows);
+    btn.onclick = async () => {
+      await toggleFollow(viewer.id, target);
+    };
+  } catch (e) {
+    console.warn('wireFollow error', e);
+  }
+}
+
+/* ----------------------------------
+   PIN / UNPIN POST
+----------------------------------- */
+async function togglePin(postId, newValue) {
+  await client
+    .from("messages")
+    .update({ pinned: newValue })
+    .eq("id", postId);
+
+  loadPosts();
+}
+
+/* ----------------------------------
+   LOAD POSTS
+----------------------------------- */
+async function loadPosts() {
+  const postsDiv = document.getElementById("posts");
+
+  try {
+    const { data, error } = await client
+      .from("messages")
+      .select("id, title, body, image_url, timestamp, pinned, user_id, comment_count")
+      .eq("user_id", profileId)
+      .order("timestamp", { ascending: false });
+
+    if (error) {
+      postsDiv.textContent = "Failed to load posts.";
+      return;
+    }
+
+    if (!data?.length) {
+      postsDiv.textContent = "No posts.";
+      return;
+    }
+
+    const local = getLocalUser();
+    const isOwner = local && local.id === profileId;
+
+    const pinned = data.filter(p => p.pinned);
+    const unpinned = data.filter(p => !p.pinned);
+    const sorted = [...pinned, ...unpinned];
+
+    postsDiv.innerHTML = "";
+
+    sorted.forEach(post => {
+      const div = document.createElement("div");
+      div.className = "post";
+
+      const date = new Date(Number(post.timestamp) || 0).toLocaleString();
+      const renderedBody = renderContent(post.body);
+      const imageHtml = post.image_url ? `<div class="embedded-image"><a href="${escapeHtml(post.image_url)}" target="_blank" rel="noopener noreferrer"><img class="auto-image" src="${escapeHtml(post.image_url)}" alt="post image"></a></div>` : "";
+      const commentCount = (post.comment_count !== null && post.comment_count !== undefined) ? post.comment_count : 0;
+      const pinnedBadgeHtml = post.pinned ? `<span class="pinned-badge">Pinned</span>` : "";
+
+      div.innerHTML = `
+        <div>
+          <a href="post.html?id=${post.id}">
+            <div class="post-title">${escapeHtml(post.title)} ${pinnedBadgeHtml}</div>
+          </a>
+          <div class="post-meta">${date}</div>
+        </div>
+        ${imageHtml}
+        <div class="post-body">${renderedBody}</div>
+        <div class="metaSmall">💬 ${commentCount}</div>
+      `;
+
+      if (isOwner) {
+        const btn = document.createElement("button");
+        btn.className = "pin-btn";
+        btn.textContent = post.pinned ? "Unpin" : "Pin";
+        btn.onclick = () => togglePin(post.id, !post.pinned);
+        div.appendChild(btn);
+      }
+
+      postsDiv.appendChild(div);
+    });
+  } catch (e) {
+    console.warn('loadPosts', e);
+    postsDiv.textContent = "Failed to load posts.";
+  }
+}
+
+/* ----------------------------------
+   LOAD COMMENTS
+----------------------------------- */
+async function loadComments() {
+  const commentsDiv = document.getElementById("comments");
+
+  try {
+    const { data, error } = await client
+      .from("comments")
+      .select("id, post_id, body, timestamp")
+      .eq("user_id", profileId)
+      .order("timestamp", { ascending: false });
+
+    if (error) {
+      commentsDiv.textContent = "Failed to load comments.";
+      return;
+    }
+
+    if (!data?.length) {
+      commentsDiv.textContent = "No comments.";
+      return;
+    }
+
+    commentsDiv.innerHTML = "";
+
+    data.forEach(c => {
+      const div = document.createElement("div");
+      div.className = "comment";
+
+      const date = new Date(Number(c.timestamp) || 0).toLocaleString();
+      const rendered = renderContent(c.body);
+
+      div.innerHTML = `
+        <div style="font-size:14px; margin-bottom:6px;"><a href="post.html?id=${c.post_id}">View Thread</a></div>
+        <div class="post-body">${rendered}</div>
+        <div style="color:#666; font-size:12px; margin-top:4px;">${date}</div>
+      `;
+
+      commentsDiv.appendChild(div);
+    });
+  } catch (e) {
+    console.warn('loadComments', e);
+    commentsDiv.textContent = 'Failed to load comments.';
+  }
+}
+
+/* ----------------------------------
+   LOCAL NOTIFICATION SETTINGS (dropdown; localStorage)
+----------------------------------- */
+const LOCAL_KEY = 'notif_settings_local';
+const DEFAULT_LOCAL_SETTINGS = {
+  followed_channels: false,
+  followed_users: false,
+  followed_users: false,
+new_followers: false,
+  new_posts: false,
+  comments_under_posts: false,
+  dms: false
+};
+
+const NOTIF_KEYS = [
+  { key: 'followed_channels', label: 'Followed Channels' },
+  { key: 'followed_users', label: 'Followed Users' },
+  { key: 'new_followers', label: 'New Followers' },
+  { key: 'new_posts', label: 'New Posts' },
+  { key: 'comments_under_posts', label: 'Comments Under Your Posts' },
+  { key: 'dms', label: 'DMs' }
+];
+
+function readLocalNotifSettings() {
+  try {
+    const raw = safeLocalStorage.getItem(LOCAL_KEY);
+    if (!raw) return { ...DEFAULT_LOCAL_SETTINGS };
+    const parsed = JSON.parse(raw);
+    return Object.assign({}, DEFAULT_LOCAL_SETTINGS, parsed);
+  } catch (e) {
+    console.warn('Failed to read local notif settings', e);
+    return { ...DEFAULT_LOCAL_SETTINGS };
+  }
+}
+
+function saveLocalNotifSettings(obj) {
+  try {
+    safeLocalStorage.setItem(LOCAL_KEY, JSON.stringify(obj));
+    const savedEl = document.getElementById('notifSaved');
+    if (savedEl) {
+      savedEl.style.display = 'inline';
+      setTimeout(() => savedEl.style.display = 'none', 1400);
+    }
+  } catch (e) {
+    console.warn('Failed to save local notif settings', e);
+    const errEl = document.getElementById('notifSaveErr');
+    if (errEl) {
+      errEl.style.display = 'inline';
+      setTimeout(() => errEl.style.display = 'none', 2000);
+    }
+  }
+}
+
+function resetLocalNotifSettings() {
+  safeLocalStorage.removeItem(LOCAL_KEY);
+  const s = readLocalNotifSettings();
+  renderNotifToggles(s);
+  saveLocalNotifSettings(s);
+}
+
+function createToggleElement(item, value) {
+  const row = document.createElement('div');
+  row.className = 'notif-row';
+  const name = document.createElement('div');
+  name.className = 'notif-name';
+  name.textContent = item.label;
+
+  const toggle = document.createElement('div');
+  toggle.className = 'toggle' + (value ? ' on' : '');
+  toggle.setAttribute('data-key', item.key);
+  const knob = document.createElement('div');
+  knob.className = 'knob';
+  toggle.appendChild(knob);
+
+  toggle.onclick = () => {
+    const key = item.key;
+    const newVal = !toggle.classList.contains('on');
+    toggle.classList.toggle('on', newVal);
+    const st = readLocalNotifSettings();
+    st[key] = !!newVal;
+    saveLocalNotifSettings(st);
+  };
+
+  row.appendChild(name);
+  row.appendChild(toggle);
+  return row;
+}
+
+function renderNotifToggles(settings) {
+  const container = document.getElementById('notifRows');
+  if (!container) return;
+  container.innerHTML = '';
+  NOTIF_KEYS.forEach(k => {
+    container.appendChild(createToggleElement(k, !!settings[k.key]));
+  });
+}
+
+/* Dropdown toggle */
+function wireDropdown() {
+  const btn = document.getElementById('notifToggleBtn');
+  const content = document.getElementById('notifDropdownContent');
+  if (!btn || !content) return;
+
+  btn.onclick = (e) => {
+    e.stopPropagation();
+    content.style.display = (content.style.display === 'none' ? 'block' : 'none');
+  };
+
+  // close when clicking outside
+  document.addEventListener('click', (e) => {
+    if (!content.contains(e.target) && e.target !== btn) {
+      content.style.display = 'none';
+    }
+  });
+}
+
+/* ----------------------------------
+   Notifications list, badge, realtime, paging, cleanup
+----------------------------------- */
+function mapTypeToKey(type) {
+  const map = {
+    'new_follower': 'new_followers',
+    'dm': 'dms',
+    'new_post_by_followed_user': 'followed_users',
+    'new_post_in_channel': 'followed_channels',
+    'new_comment_on_your_post': 'comments_under_posts',
+    'reply_to_your_comment': 'comments_under_posts'
+  };
+  return map[type] || null;
+}
+
+function formatTime(tsOrIso) {
+  try {
+    const d = typeof tsOrIso === 'number' ? new Date(tsOrIso) : new Date(tsOrIso);
+    return d.toLocaleString();
+  } catch { return ''; }
+}
+
+function buildNotificationMessage(n) {
+  const t = n.type;
+  const data = n.data || {};
+  const actor = data.actor_name || (n.actor_user_id ? 'Someone' : 'System');
+  if (t === 'new_follower') return `<strong>${escapeHtml(actor)}</strong> followed you.`;
+  if (t === 'dm') return `<strong>${escapeHtml(actor)}</strong> sent you a message: "${escapeHtml((data.preview||'').slice(0,120))}"`;
+  if (t === 'new_post_by_followed_user') return `<strong>${escapeHtml(actor)}</strong> published: ${escapeHtml(data.title || '(untitled)')}`;
+  if (t === 'new_post_in_channel') return `New post in channel ${escapeHtml(String(data.channel_id||''))}: ${escapeHtml(data.title||'(untitled)')}`;
+  if (t === 'new_comment_on_your_post') return `<strong>${escapeHtml(actor)}</strong> commented on your post: "${escapeHtml((data.preview||'').slice(0,120))}"`;
+  if (t === 'reply_to_your_comment') return `<strong>${escapeHtml(actor)}</strong> replied: "${escapeHtml((data.preview||'').slice(0,120))}"`;
+  return escapeHtml(t);
+}
+
+function renderNotifList(notifications, mutedSet = new Set()) {
+  const list = document.getElementById('notifList');
+  if (!list) return;
+  list.innerHTML = '';
+  if (!notifications || notifications.length === 0) {
+    list.textContent = "No notifications.";
+    return;
+  }
+
+  notifications.forEach(n => {
+    const item = document.createElement('div');
+    item.className = 'notif-item' + (mutedSet.has(n.id) ? ' muted' : '');
+    const left = document.createElement('div');
+    left.className = 'left';
+    left.textContent = (n.data && n.data.actor_initial) ? n.data.actor_initial : '•';
+    const body = document.createElement('div');
+    body.className = 'body';
+    const title = document.createElement('div');
+    title.innerHTML = buildNotificationMessage(n);
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.textContent = `${n.read ? 'Read' : 'Unread'} · ${formatTime(n.created_at)}`;
+
+    body.appendChild(title);
+    body.appendChild(meta);
+
+    const right = document.createElement('div');
+    right.style.display = 'flex';
+    right.style.gap = '8px';
+    const openBtn = document.createElement('button');
+    openBtn.className = 'btn-small';
+    openBtn.textContent = 'Open';
+    openBtn.onclick = () => openNotificationTarget(n);
+    const markBtn = document.createElement('button');
+    markBtn.className = 'btn-small';
+    markBtn.textContent = n.read ? 'Mark unread' : 'Mark read';
+    markBtn.onclick = () => toggleMarkRead(n.id, !n.read);
+
+    right.appendChild(openBtn);
+    right.appendChild(markBtn);
+
+    item.appendChild(left);
+    item.appendChild(body);
+    item.appendChild(right);
+
+    list.appendChild(item);
+  });
+}
+
+async function openNotificationTarget(n) {
+  if (n.type === 'dm') window.location.href = `thread.html?peer=${encodeURIComponent(n.actor_user_id)}`;
+  else if (n.type === 'new_follower') window.location.href = `profile.html?id=${encodeURIComponent(n.actor_user_id)}`;
+  else if (n.reference_id) window.location.href = `post.html?id=${encodeURIComponent(n.reference_id)}`;
+  else window.alert('No target for this notification.');
+  await markNotificationRead(n.id, true);
+}
+
+async function markNotificationRead(id, read = true) {
+  try {
+    await client.from('notifications').update({ read }).eq('id', id);
+    await loadNotifications(); // refresh list and badge
+  } catch (e) {
+    console.warn('Failed to mark read', e);
+    showError('Failed to update notification.');
+  }
+}
+
+async function toggleMarkRead(id, newState) {
+  await markNotificationRead(id, newState);
+}
+
+function updateBadge(count) {
+  const el = document.getElementById('notifBadge');
+  if (!el) return;
+  if (!count || count <= 0) { el.style.display = 'none'; }
+  else { el.style.display = 'inline-block'; el.textContent = count; }
+}
+
+/* Paging state */
+let allNotifications = [];
+let shownCount = 0;
+const NOTIF_PAGE_SIZE = 5;
+
+/* Load notifications with paging and auto-delete of read > 7 days */
+async function loadNotifications(uidParam) {
+  const local = uidParam ? { id: uidParam } : getLocalUser();
+  const notifList = document.getElementById("notifList");
+  const showMoreBtn = document.getElementById("showMoreBtn");
+  const markAllReadBtn = document.getElementById("markAllReadBtn");
+
+  // Only load notifications if this is the signed-in user's own profile
+  if (!local || local.id !== profileId) {
+    updateBadge(0);
+    if (notifList) notifList.innerHTML = '';
+    showMoreBtn.style.display = 'none';
+    markAllReadBtn.style.display = 'none';
+    return;
+  }
+
+  notifList.textContent = "Loading…";
+
+  try {
+    // Fetch up to 200 most recent to allow paging client-side (avoid infinite)
+    const { data: notifications, error } = await client
+      .from('notifications')
+      .select('id, actor_user_id, type, reference_id, data, read, created_at')
+      .eq('recipient_user_id', local.id)
+      .order('created_at', { ascending: false })
+      .limit(200);
+
+    if (error) throw error;
+
+    // Auto-delete read notifications older than 7 days (server-side deletion)
+    const weekAgo = Date.now() - 7*24*60*60*1000;
+    const oldRead = (notifications || []).filter(n => n.read && new Date(n.created_at).getTime() < weekAgo);
+    if (oldRead.length > 0) {
+      const idsToDelete = oldRead.map(n => n.id);
+      try {
+        await client.from('notifications').delete().in('id', idsToDelete);
+      } catch (e) {
+        console.warn('Failed to delete old notifications', e);
+      }
+    }
+
+    // Refilter after potential deletion
+    const remaining = (notifications || []).filter(n => !(n.read && new Date(n.created_at).getTime() < weekAgo));
+
+    // Enrich actor info
+    const actorIds = [...new Set(remaining.map(n => n.actor_user_id).filter(Boolean))];
+    let actorsMap = {};
+    if (actorIds.length > 0) {
+      const { data: actors } = await client.from('profiles').select('user_id, username, avatar_url').in('user_id', actorIds);
+      (actors || []).forEach(a => { actorsMap[a.user_id] = a; });
+    }
+
+    const settings = readLocalNotifSettings();
+    const mutedSet = new Set();
+
+    remaining.forEach(n => {
+      const actor = actorsMap[n.actor_user_id];
+      n.data = n.data || {};
+      if (actor) {
+        n.data.actor_name = actor.username;
+        n.data.actor_initial = actor.username[0]?.toUpperCase();
+      } else if (n.actor_user_id) {
+        n.data.actor_name = 'Someone';
+        n.data.actor_initial = 'S';
+      } else {
+        n.data.actor_name = 'System';
+        n.data.actor_initial = 'S';
+      }
+      const key = mapTypeToKey(n.type);
+      if (key && !settings[key]) mutedSet.add(n.id);
+    });
+
+    allNotifications = remaining;
+    shownCount = 0;
+    // clear list
+    notifList.innerHTML = '';
+    // show first page
+    showNextNotifications(mutedSet);
+
+    // show/hide show more button
+    showMoreBtn.style.display = shownCount < allNotifications.length ? 'inline-block' : 'none';
+    showMoreBtn.onclick = () => showNextNotifications(mutedSet);
+
+    // mark all read button
+    markAllReadBtn.style.display = allNotifications.length ? "inline-block" : "none";
+    markAllReadBtn.onclick = async () => {
+      const unreadIds = allNotifications.filter(n => !n.read).map(n => n.id);
+      if (!unreadIds.length) return;
+      const { error: markErr } = await client.from('notifications').update({ read: true }).in('id', unreadIds);
+      if (markErr) { console.warn(markErr); showError("Failed to mark read."); return; }
+      await loadNotifications();
+    };
+
+    const unreadCount = allNotifications.filter(n => !n.read).length;
+    updateBadge(unreadCount);
+
+  } catch (e) {
+    console.warn('loadNotifications error', e);
+    if (notifList) notifList.textContent = "Failed to load notifications.";
+  }
+}
+
+/* Show next page of notifications and mark them read (best-effort) */
+function showNextNotifications(mutedSet = new Set()) {
+  const notifList = document.getElementById("notifList");
+  const showMoreBtn = document.getElementById("showMoreBtn");
+  const slice = allNotifications.slice(shownCount, shownCount + NOTIF_PAGE_SIZE);
+  slice.forEach(n => {
+    const item = document.createElement('div');
+    item.className = 'notif-item' + (mutedSet.has(n.id) ? ' muted' : '');
+    const left = document.createElement('div');
+    left.className = 'left';
+    left.textContent = (n.data && n.data.actor_initial) ? n.data.actor_initial : '•';
+    const body = document.createElement('div');
+    body.className = 'body';
+    const title = document.createElement('div');
+    title.innerHTML = buildNotificationMessage(n);
+    const meta = document.createElement('div');
+    meta.className = 'meta';
+    meta.textContent = `${n.read ? 'Read' : 'Unread'} · ${formatTime(n.created_at)}`;
+
+    body.appendChild(title);
+    body.appendChild(meta);
+
+    const right = document.createElement('div');
+    right.style.display = 'flex';
+    right.style.gap = '8px';
+    const openBtn = document.createElement('button');
+    openBtn.className = 'btn-small';
+    openBtn.textContent = 'Open';
+    openBtn.onclick = () => openNotificationTarget(n);
+    const markBtn = document.createElement('button');
+    markBtn.className = 'btn-small';
+    markBtn.textContent = n.read ? 'Mark unread' : 'Mark read';
+    markBtn.onclick = () => toggleMarkRead(n.id, !n.read);
+
+    right.appendChild(openBtn);
+    right.appendChild(markBtn);
+
+    item.appendChild(left);
+    item.appendChild(body);
+    item.appendChild(right);
+
+    notifList.appendChild(item);
+  });
+
+  // mark shown notifications as read (best-effort)
+  const idsToMark = slice.filter(n => !n.read).map(n => n.id);
+  if (idsToMark.length) {
+    client.from('notifications').update({ read: true }).in('id', idsToMark).then(() => {
+      // update local state
+      allNotifications = allNotifications.map(a => idsToMark.includes(a.id) ? ({...a, read: true}) : a);
+      // update badge
+      const unread = allNotifications.filter(n => !n.read).length;
+      updateBadge(unread);
+    }).catch(e => console.warn("mark read error", e));
+  }
+
+  shownCount += slice.length;
+  showMoreBtn.style.display = shownCount < allNotifications.length ? 'inline-block' : 'none';
+}
+
+/* realtime */
+let notifChannel = null;
+function subscribeRealtimeNotifications() {
+  const local = getLocalUser();
+  if (!local || local.id !== profileId) return;
+
+  try { if (notifChannel) client.removeChannel(notifChannel); } catch {}
+
+  notifChannel = client.channel(`public:notifications:${local.id}`)
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications', filter: `recipient_user_id=eq.${local.id}` }, payload => {
+      const newNotif = payload.new;
+      handleIncomingNotificationRealtime(newNotif);
+    })
+    .subscribe();
+}
+
+async function handleIncomingNotificationRealtime(n) {
+  const local = getLocalUser();
+  if (!local || local.id !== profileId) return;
+
+  if (n.actor_user_id) {
+      try {
+      const { data } = await client.from('profiles').select('username').eq('user_id', n.actor_user_id).maybeSingle();
+      if (data) {
+        n.data = n.data || {};
+        n.data.actor_name = data.username;
+        n.data.actor_initial = data.username[0]?.toUpperCase();
+      }
+    } catch {}
+  }
+
+  await loadNotifications(); // refresh list and badge
+
+  const settings = readLocalNotifSettings();
+  const key = mapTypeToKey(n.type);
+  const allowed = key ? !!settings[key] : true;
+  if (allowed) {
+    smallToast(buildNotificationMessage({ type: n.type, actor_user_id: n.actor_user_id, data: n.data }));
+  }
+}
+
+/* tiny toast */
+function smallToast(msg) {
+  const d = document.createElement('div');
+  d.style.position = 'fixed';
+  d.style.right = '20px';
+  d.style.bottom = '20px';
+  d.style.background = '#333';
+  d.style.color = '#fff';
+  d.style.padding = '10px 14px';
+  d.style.borderRadius = '8px';
+  d.style.zIndex = 9999;
+  d.style.boxShadow = '0 4px 12px rgba(0,0,0,.15)';
+  d.innerHTML = msg;
+  document.body.appendChild(d);
+  setTimeout(() => { d.style.transition = 'opacity .3s'; d.style.opacity = 0; setTimeout(() => d.remove(), 300); }, 3200);
+}
+
+/* ----------------------------------
+   MUTUAL FOLLOWERS
+----------------------------------- */
+async function loadMutualFollowers() {
+  const container = document.getElementById("mutualFollowers");
+  const viewer = getLocalUser();
+  if (!viewer || viewer.id === profileId) {
+    container.textContent = "N/A";
+    return;
+  }
+
+  container.textContent = "Loading…";
+
+  try {
+    const [{ data: profileFollowers }, { data: myFollowers }] = await Promise.all([
+      client.from("follows").select("follower_id").eq("following_id", profileId),
+      client.from("follows").select("follower_id").eq("following_id", viewer.id)
+    ]);
+
+    const profileFollowerIds = (profileFollowers || []).map(r => String(r.follower_id));
+    const myFollowerIds = new Set((myFollowers || []).map(r => String(r.follower_id)));
+    const mutualIds = profileFollowerIds.filter(id => myFollowerIds.has(id));
+
+    if (!mutualIds.length) {
+      container.textContent = "No mutual followers.";
+      return;
+    }
+
+    const { data: mutualProfiles, error } = await client
+      .from("profiles")
+      .select("user_id, username, avatar_url")
+      .in("user_id", mutualIds);
+
+    if (error) { console.warn(error); container.textContent = "Failed to load mutual profiles."; return; }
+
+    container.innerHTML = "";
+    (mutualProfiles || []).forEach(p => {
+      const div = document.createElement("div");
+      div.className = "mutualItem";
+      div.innerHTML = `<img src="${p.avatar_url || 'https://via.placeholder.com/28'}" style="width:28px;height:28px;border-radius:6px;border:1px solid #ddd;">
+                       <a href="profile.html?id=${p.user_id}">${escapeHtml(p.username)}</a>`;
+      container.appendChild(div);
+    });
+  } catch (e) {
+    console.warn('loadMutualFollowers', e);
+    container.textContent = "Failed to load mutual followers.";
+  }
+}
+
+async function loadBadges(targetUserId) {
+  // 1. SELF-HEALING CONTAINER (Keeps the badges from disappearing)
+  let container = document.getElementById("badgesList");
+  if (!container) {
+    const bioBox = document.getElementById("bioBox");
+    if (bioBox) {
+        container = document.createElement("div");
+        container.id = "badgesList";
+        container.className = "badges";
+        container.style.marginTop = "10px";
+        bioBox.appendChild(container);
+    } else {
+        return; // No place to put badges
+    }
+  }
+  container.innerHTML = ''; 
+
+  try {
+    // 2. ROBUST FETCH: Get ALL badges, ignoring filters for now
+    const { data: allBadges, error } = await client
+      .from("user_badges")
+      .select("*"); // Get everything
+
+    if (error) {
+        console.error("Supabase Error:", error);
+        return;
+    }
+
+    // 3. JAVASCRIPT FILTERING (The Bulletproof Part)
+    // We check each badge to see if YOUR ID is inside the 'holders' list
+    const myBadges = allBadges.filter(badge => {
+        let holders = badge.holders;
+
+        // Safety Check: If Supabase returns it as a text string instead of an array, fix it.
+        if (typeof holders === 'string') {
+            try { holders = JSON.parse(holders); } catch (e) { return false; }
+        }
+
+        // Check if the array exists and includes the Target User ID
+        return Array.isArray(holders) && holders.includes(targetUserId);
+    });
+
+    // 4. RENDER
+    if (myBadges.length === 0) return;
+
+    myBadges.forEach(b => {
+      const span = document.createElement("span");
+      span.className = "badge";
+      span.style.display = "inline-flex";
+      span.style.alignItems = "center";
+      span.style.gap = "6px";
+      span.style.marginRight = "5px"; 
+      
+      // Image
+      if (b.image_url) {
+        const img = document.createElement("img");
+        img.src = b.image_url;
+        img.style.width = "16px";
+        img.style.height = "16px";
+        img.style.objectFit = "contain";
+        span.appendChild(img);
+      }
+
+      // Text
+      const textNode = document.createTextNode(b.label);
+      span.appendChild(textNode);
+
+      // Color
+      if(b.color) {
+        span.style.borderColor = b.color;
+        span.style.color = b.color;
+      }
+      
+      container.appendChild(span);
+    });
+  } catch (e) {
+    console.warn("Error loading badges:", e);
+  }
+}
+
+/* ----------------------------------
+   INIT
+----------------------------------- */
+document.getElementById('resetNotifBtn').onclick = resetLocalNotifSettings;
+
+async function init() {
+  await resolveUsernameIfNeeded();
+  const profile = await loadProfile();
+  if (!profile) return;
+
+  console.log("Current Profile ID for Badges:", profileId); // Add this line
+  await loadBadges(profileId);
+
+  await loadFollowCounts();
+  await loadPosts();
+  await loadComments();
+
+  // Mutual followers: show only when viewer exists and isn't owner
+  const viewer = getLocalUser();
+  document.getElementById("mutualSection").style.display = (viewer && viewer.id !== profileId) ? "block" : "none";
+  if (viewer && viewer.id !== profileId) {
+    loadMutualFollowers();
+  }
+
+  // Only render and wire notifications UI if owner
+  const local = getLocalUser();
+  const isOwner = local && local.id === profileId;
+  if (isOwner) {
+    // Ensure notifications UI is visible and wired
+    const notifSec = document.getElementById('notificationsSection');
+    if (notifSec) notifSec.style.display = 'block';
+    const notifControls = document.getElementById('notificationsControls');
+    if (notifControls) notifControls.style.display = 'flex';
+
+    const settings = readLocalNotifSettings();
+    renderNotifToggles(settings);
+    wireDropdown();
+    await loadNotifications();
+    subscribeRealtimeNotifications();
+  } else {
+    const notifSec = document.getElementById('notificationsSection');
+    if (notifSec) notifSec.style.display = 'none';
+    updateBadge(0);
+  }
+}
+
+init();
+</script>
+<script src="theme.js" defer></script>
+</body>
+</html>

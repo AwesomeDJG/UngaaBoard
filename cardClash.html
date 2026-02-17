@@ -1,0 +1,1341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Card Clash</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        /* --- THEME --- */
+        :root { --bg: #121212; --card-bg: #1E1E1E; --text: #E0E0E0; --accent: #BB86FC; --gold: #FFD700; --red: #CF6679; }
+        body { background: var(--bg); color: var(--text); font-family: sans-serif; height: 100vh; margin: 0; overflow: hidden; }
+        
+        /* Loading Screen */
+        #loading-screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg); z-index: 20; }
+        
+        .screen { position: fixed; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg); z-index: 10; }
+        .hidden { display: none !important; }
+ 
+        /* --- UI ELEMENTS --- */
+        button { padding: 10px 20px; border-radius: 4px; border: none; font-weight: bold; cursor: pointer; transition: 0.2s; margin: 5px; }
+        .btn-primary { background: var(--accent); color: black; }
+        .btn-gold { background: var(--gold); color: black; }
+        .btn-danger { background: #333; color: #fff; border: 1px solid #555; }
+        .btn-danger:hover { background: var(--red); border-color: var(--red); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+ 
+        /* --- SHOP GRID --- */
+        .shop-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 15px; padding: 20px; width: 80%; max-width: 800px; overflow-y: auto; max-height: 60vh; }
+        .shop-card { background: var(--card-bg); padding: 10px; border-radius: 8px; border: 1px solid #333; text-align: center; }
+        .shop-card img { width: 100%; height: 80px; object-fit: cover; border-radius: 4px; }
+        .price-tag { color: var(--gold); font-weight: bold; margin: 5px 0; }
+ 
+        /* --- GAME UI --- */
+        #game-ui { display: none; height: 100vh; grid-template-rows: 80px 1fr 260px; overflow: hidden; }
+        .header { display: flex; justify-content: space-between; padding: 0 30px; background: #1f1f1f; border-bottom: 1px solid #333; align-items: center; }
+        
+        /* BATTLEFIELD */
+        .battlefield-container { position: relative; display: flex; flex-direction: column; min-height: 0; background: #000; }
+        .battlefield { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 8px; }
+        .log-entry { padding: 8px; background: #1a1a1a; border-left: 3px solid var(--accent); border-radius: 4px; font-size: 0.9em; flex-shrink: 0; }
+        
+        /* HAND */
+        .hand-container { display: flex; gap: 10px; overflow-x: auto; padding: 15px; background: #1f1f1f; align-items: center; height: 100%; border-top: 1px solid #333; box-sizing: border-box; }
+        .card { 
+            min-width: 140px; width: 140px; height: 200px; background: #000; border: 1px solid #444; 
+            border-radius: 6px; padding: 8px; position: relative; cursor: pointer;
+            display: flex; flex-direction: column; transition: transform 0.2s; flex-shrink: 0;
+        }
+        .card:hover { transform: translateY(-10px); border-color: var(--accent); }
+        .card img { height: 90px; width: 100%; object-fit: cover; background: #222; margin-bottom: 5px; }
+        .card h4 { margin: 0; font-size: 0.85rem; color: #fff; }
+        .card p { font-size: 0.7rem; color: #aaa; line-height: 1.3; }
+        .card-cost { position: absolute; top: -5px; right: -5px; background: var(--accent); color: #000; width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; }
+
+        /* --- GACHA ANIMATION --- */
+        @keyframes popIn { 0% { transform: scale(0); opacity: 0; } 80% { transform: scale(1.1); opacity: 1; } 100% { transform: scale(1); } }
+        .gacha-card-anim { animation: popIn 0.5s ease-out forwards; border: 2px solid var(--gold) !important; box-shadow: 0 0 15px var(--gold); }
+    </style>
+</head>
+<body>
+ 
+    <div id="loading-screen">
+        <h2 style="margin-bottom: 10px;">Card Clash</h2>
+        <div id="auth-status" style="color: #888;">Authenticating...</div>
+    </div>
+ 
+    <div id="lobby-screen" class="screen hidden">
+        <div style="display:flex; justify-content:space-between; width: 80%; max-width: 800px; align-items: center;">
+            <h2>Welcome, <span id="lobby-user"></span></h2>
+            <div style="display: flex; gap: 15px; align-items: center;">
+                <div style="color: var(--gold); font-weight: bold; font-size: 1.2rem;">💰 <span id="coin-display">0</span></div>
+                <button class="btn-danger" onclick="app.logout()" style="padding: 5px 10px; font-size: 0.8rem;">Logout</button>
+            </div>
+        </div>
+        
+        <div style="margin-bottom: 20px;">
+            <button class="btn-primary" id="find-match-btn" onclick="app.findMatch()">⚔️ FIND MATCH</button>
+        </div>
+        
+        <div class="lobby-controls" style="margin: 20px 0; display:flex; gap:10px; justify-content:center; flex-wrap: wrap;">
+            <button onclick="shop.show()" class="btn-gold">Card Gallery</button>
+            <button onclick="gachaSystem.show()" class="btn-gold" style="background: linear-gradient(45deg, #FFD700, #FFA500); border: 1px solid white;">Card Unlock</button>
+            <button onclick="deckBuilder.show()" class="btn-gold" style="background:#444; color:white;">Manage Deck</button>
+            <button onclick="tradeSystem.show()" class="btn-gold" style="background:#2a9d8f; color:white;">Trade Center</button>
+        </div>
+
+        <div id="shop-container" class="shop-grid"></div>
+        <p id="lobby-status" style="color: #888; height: 20px; font-weight: bold; margin-top: 10px;"></p>
+        <button id="rejoin-btn" class="hidden" onclick="app.rejoinLastMatch()" style="margin-top:10px; background: #333; color: #fff;">⚠️ Rejoin Active Match</button>
+    </div>
+ 
+    <div id="deck-editor" class="hidden" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:100; padding:20px; overflow-y:auto;">
+        <div style="max-width:1200px; margin:0 auto; display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+            <div class="panel">
+                <h2 style="color:var(--accent); border-bottom:1px solid #444; padding-bottom:10px;">
+                    Active Deck (<span id="deck-count">0</span>)
+                    <button onclick="deckBuilder.hide()" style="float:right; font-size:0.8rem;">SAVE & CLOSE</button>
+                </h2>
+                <p style="font-size:0.8rem; color:#888;">Click card to remove.</p>
+                <div id="active-deck-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(100px, 1fr)); gap:10px; margin-top:10px;"></div>
+            </div>
+            <div class="panel">
+                <h2>Your Collection</h2>
+                <p style="font-size:0.8rem; color:#888;">Click to add (Max 3 copies per card).</p>
+                <div id="collection-grid" style="display:grid; grid-template-columns:repeat(auto-fill, minmax(100px, 1fr)); gap:10px; margin-top:10px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <div id="trade-center" class="hidden" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.95); z-index:110; padding:20px; overflow-y:auto;">
+    <div style="max-width:900px; margin:0 auto;">
+        
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #444; padding-bottom:15px; margin-bottom:20px;">
+            <h2 style="color:var(--accent); margin:0;">Global Trade Market</h2>
+            <button onclick="document.getElementById('trade-center').classList.add('hidden')" style="background:#444;">CLOSE</button>
+        </div>
+
+        <div class="panel" style="margin-bottom:20px; border:1px solid #444; padding:15px;">
+            <h3>Create Multi-Card Offer</h3>
+            
+            <div style="display:grid; grid-template-columns: 1fr 50px 1fr; gap:20px; align-items:start;">
+                
+                <div style="background:#111; padding:10px; border-radius:8px;">
+                    <label style="color:cyan; font-weight:bold;">YOU GIVE:</label>
+                    <div style="display:flex; gap:5px; margin-bottom:10px;">
+                        <select id="trade-give-select" style="padding:5px; background:#222; color:white; border:1px solid #444; flex:1;"></select>
+                        <button onclick="tradeSystem.stageItem('give')" class="btn-primary" style="margin:0; padding:5px 10px;">+</button>
+                    </div>
+                    <div id="staged-give-list" style="display:flex; flex-wrap:wrap; gap:5px; min-height:50px; background:#000; padding:5px;"></div>
+                </div>
+
+                <div style="display:flex; align-items:center; justify-content:center; height:100%; font-size:30px;">
+                    ➡️
+                </div>
+
+                <div style="background:#111; padding:10px; border-radius:8px;">
+                    <label style="color:var(--gold); font-weight:bold;">YOU WANT:</label>
+                    <div style="display:flex; gap:5px; margin-bottom:10px;">
+                        <select id="trade-want-select" style="padding:5px; background:#222; color:white; border:1px solid #444; flex:1;"></select>
+                        <button onclick="tradeSystem.stageItem('want')" class="btn-primary" style="margin:0; padding:5px 10px;">+</button>
+                    </div>
+                    <div id="staged-want-list" style="display:flex; flex-wrap:wrap; gap:5px; min-height:50px; background:#000; padding:5px;"></div>
+                </div>
+
+            </div>
+
+            <div style="text-align:right; margin-top:15px;">
+                <button onclick="tradeSystem.create()" class="btn-gold" style="padding:10px 30px;">POST TRADE</button>
+            </div>
+        </div>
+
+        <div class="panel">
+            <h3>Active Market Offers</h3>
+            <div id="trade-list" style="display:flex; flex-direction:column; gap:10px; padding-bottom:50px;"></div>
+        </div>
+    </div>
+</div>
+
+    <div id="gacha-screen" class="hidden" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.98); z-index:120; display:flex; flex-direction:column; align-items:center; justify-content:center;">
+        <h1 style="color:var(--gold); text-shadow: 0 0 20px var(--gold); margin-bottom: 20px;">Mystery Pack</h1>
+        
+        <div id="gacha-display-area" style="display:flex; gap:20px; min-height: 250px; align-items:center; justify-content:center; margin-bottom: 30px;">
+            <div style="color:#666; font-style:italic;">Contains 3 random cards...<br>Rare cards are harder to find!</div>
+        </div>
+
+        <div style="display:flex; gap:20px;">
+            <button onclick="gachaSystem.buyPack()" class="btn-gold" style="font-size: 1.2rem; padding: 15px 30px;">OPEN PACK (100 Coins)</button>
+            <button onclick="document.getElementById('gacha-screen').classList.add('hidden')" style="background:#333; color:white;">CLOSE</button>
+        </div>
+        <p id="gacha-status" style="color:var(--accent); margin-top:10px; height:20px;"></p>
+    </div>
+ 
+    <div id="game-ui">
+        
+        <div class="header">
+            <div class="player-area opponent">
+        <h3 id="enemy-username" style="color:#ff6666; margin:0;">Finding Opponent...</h3>
+            <div>ENEMY HP: <b id="enemy-hp" style="color: var(--red);">30</b></div>
+            </div>
+            <div id="timer-display" style="font-size: 1.5rem; font-weight: bold; color: white;">--</div>
+            <div id="turn-display">WAITING...</div>
+            <div style="text-align: right;">
+                <div>YOU HP: <b id="my-hp" style="color: var(--accent);">30</b></div>
+                <small>⚡ <span id="my-mana">0</span>/3 | Buffs: <span id="my-buffs">None</span></small>
+            </div>
+        
+        </div>
+        
+        <div class="battlefield-container">
+            <div id="battlefield" class="battlefield"></div>
+        </div>
+        
+ 
+        <div class="hand-container" id="hand"></div>
+        <div style="position: fixed; bottom: 250px; right: 20px; z-index: 100;">
+            <button class="btn-primary" id="end-turn-btn" onclick="game.endTurn()" disabled>End Turn</button>
+        </div>
+        <div id="controls-area" style="text-align:center; margin-top:10px;">
+    
+    <button id="forfeit-btn" onclick="game.forfeit()" style="padding:10px 20px; background:#440000; border:1px solid red; color:red; font-weight:bold; cursor:pointer; margin-left:10px;">RESET HUNGER</button>
+</div>
+    </div>
+ 
+    <script>
+        // --- SUPABASE SETUP ---
+        const client = window.supabase.createClient(
+            "https://gftohejwfjstfhkfmyjd.supabase.co",
+            "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmdG9oZWp3ZmpzdGZoa2ZteWpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMxMjk0NjgsImV4cCI6MjA3ODcwNTQ2OH0.Zq7E-xAknaZBDkCN6IecWqsDc20vTVuNt54MBWNATdY"
+        );
+ 
+        let currentUser = null;
+        let currentMatchId = null;
+        let myRole = null;
+        let myInventory = []; // IDs of cards I own (from DB)
+        let myDeck = [];      // IDs of cards in my Active Deck (from LocalStorage)
+        let allCards = [];
+        let pollingInterval = null;
+ 
+        const app = {
+            async init() {
+                const statusEl = document.getElementById('auth-status');
+                const storedId = localStorage.getItem("user_id");
+                
+                if (!storedId) { window.location.href = "signin.html"; return; }
+ 
+                statusEl.innerText = `Loading...`;
+ 
+                // 1. Fetch User
+                const { data: user, error } = await client.from('users').select('*').eq('id', storedId).single();
+                if (error || !user) { this.logout(); return; }
+ 
+                currentUser = user;
+ 
+                // 2. Load Data
+                await this.loadGameData();
+                
+                // 3. UI
+                this.updateLobbyUI();
+                this.checkForActiveMatch();
+                
+                document.getElementById('loading-screen').classList.add('hidden');
+                document.getElementById('lobby-screen').classList.remove('hidden');
+            },
+ 
+            logout() {
+                localStorage.removeItem("user_id");
+                localStorage.removeItem("username");
+                window.location.href = "signin.html";
+            },
+ 
+            async loadGameData() {
+                // A. Get Definitions
+                let { data: cards } = await client.from('cards').select('*').order('price', {ascending: true});
+                allCards = cards || [];
+ 
+                // B. Get Inventory (Server Source of Truth)
+                let { data: inventory } = await client.from('user_cards').select('card_id').eq('user_id', currentUser.id);
+                myInventory = inventory ? inventory.map(row => row.card_id) : [];
+ 
+                // C. Get Deck (Local Storage)
+                const localDeck = localStorage.getItem(`deck_config_${currentUser.id}`);
+                
+                if (localDeck) {
+                    myDeck = JSON.parse(localDeck);
+                    // Security check: Remove cards I don't own anymore (rare edge case)
+                    myDeck = myDeck.filter(id => myInventory.includes(id));
+                } 
+                
+                // D. Fallback: If deck is empty/missing, build a starter one
+                if (!myDeck || myDeck.length < 5) {
+                    const starters = allCards.filter(c => c.price === 0 && myInventory.includes(c.id));
+                    myDeck = [];
+                    // Add 3 of each starter card I own
+                    starters.forEach(c => { myDeck.push(c.id); myDeck.push(c.id); myDeck.push(c.id); });
+                    localStorage.setItem(`deck_config_${currentUser.id}`, JSON.stringify(myDeck));
+                }
+            },
+ 
+            updateLobbyUI() {
+                document.getElementById('lobby-user').innerText = currentUser.username;
+                document.getElementById('coin-display').innerText = currentUser.coins;
+                shop.render();
+            },
+ 
+            async checkForActiveMatch() {
+                let { data: matches } = await client.from('matches')
+                    .select('*')
+                    .or(`player1_id.eq.${currentUser.id},player2_id.eq.${currentUser.id}`)
+                    .eq('status', 'active')
+                    .limit(1);
+ 
+                if(matches && matches.length > 0) {
+                    const btn = document.getElementById('rejoin-btn');
+                    btn.classList.remove('hidden');
+//                    btn.innerText = `⚠️ Rejoin Match`;
+                    btn.onclick = () => {
+                        const m = matches[0];
+                        const role = m.player1_id === currentUser.id ? 'p1' : 'p2';
+                        game.start(m.id, role, []); 
+                    }
+                }
+            },
+ 
+            async findMatch() {
+                const btn = document.getElementById('find-match-btn');
+                const status = document.getElementById('lobby-status');
+                
+                // Deck Validation
+                if (myDeck.length < 5) {
+                    alert("Deck too small! Use 'Manage Deck' to add at least 5 cards.");
+                    return;
+                }
+ 
+                btn.disabled = true;
+                status.innerText = "Searching...";
+ 
+                try {
+                    // Convert IDs to full objects for the game engine
+                    const playDeck = myDeck.map(id => allCards.find(c => c.id === id)).filter(c => c !== undefined);
+ 
+                    // 1. Join Existing
+                    let { data: openMatches } = await client.from('matches')
+                        .select('*').eq('status', 'waiting').neq('player1_id', currentUser.id).limit(1);
+ 
+                    if (openMatches && openMatches.length > 0) {
+                        const match = openMatches[0];
+                        const { error } = await client.from('matches')
+                            .update({ player2_id: currentUser.id, status: 'active', current_turn: match.player1_id })
+                            .eq('id', match.id).eq('status', 'waiting');
+                        
+                        if(!error) {
+                            game.start(match.id, 'p2', playDeck);
+                            return;
+                        } 
+                    }
+ 
+                    // 2. Host New
+                    const initialState = {
+                        p1: { hp: 30, mana: 3, buffs: [], deck: [], hand: [], shield: 0, locked_card_names: [], is_stunned: false },
+                        p2: { hp: 30, mana: 3, buffs: [], deck: [], hand: [], shield: 0, locked_card_names: [], is_stunned: false },
+                        lastLog: "Match Created"
+                    };
+                    
+                    const { data: newMatch, error } = await client.from('matches').insert({ 
+                        player1_id: currentUser.id, status: 'waiting', game_state: initialState 
+                    }).select().single();
+                    
+                    if (error) throw error;
+                    
+                    game.start(newMatch.id, 'p1', playDeck);
+ 
+                } catch (err) {
+                    console.error(err);
+                    btn.disabled = false;
+                    status.innerText = "Error. Try again.";
+                }
+            },
+            
+            async refreshUserStats() {
+                let { data } = await client.from('users').select('coins').eq('id', currentUser.id).single();
+                currentUser.coins = data.coins;
+                this.updateLobbyUI();
+            },
+            
+            async rejoinLastMatch() {
+                 let { data: matches } = await client.from('matches')
+                    .select('*')
+                    .or(`player1_id.eq.${currentUser.id},player2_id.eq.${currentUser.id}`)
+                    .eq('status', 'active')
+                    .limit(1);
+                
+                if(matches && matches.length > 0) {
+                    const m = matches[0];
+                    const role = m.player1_id === currentUser.id ? 'p1' : 'p2';
+                    game.start(m.id, role, []); 
+                }
+            }
+        };
+
+        // --- TRADE SYSTEM ---
+        // --- MULTI-CARD TRADE SYSTEM ---
+const tradeSystem = {
+    stagedOffer: [],   // Array of Card IDs
+    stagedRequest: [], // Array of Card IDs
+
+    async show() {
+        document.getElementById('trade-center').classList.remove('hidden');
+        this.resetStaging();
+        this.populateDropdowns();
+        this.loadTrades();
+        
+        // Subscribe to changes
+        client.channel('public:trades')
+            .on('postgres_changes', { event: '*', schema: 'public', table: 'trades' }, () => this.loadTrades())
+            .subscribe();
+    },
+
+    resetStaging() {
+        this.stagedOffer = [];
+        this.stagedRequest = [];
+        this.renderStaged();
+    },
+
+    populateDropdowns() {
+        // Populate "Give" (My Inventory)
+        const giveSelect = document.getElementById('trade-give-select');
+        giveSelect.innerHTML = '';
+        
+        // Group my inventory by ID to show counts
+        const myCounts = {};
+        myInventory.forEach(id => myCounts[id] = (myCounts[id] || 0) + 1);
+
+        for (const [id, count] of Object.entries(myCounts)) {
+            const card = allCards.find(c => c.id == id);
+            if(card) {
+                const opt = document.createElement('option');
+                opt.value = card.id;
+                opt.innerText = `${card.name} (Owned: ${count})`;
+                giveSelect.appendChild(opt);
+            }
+        }
+
+        // Populate "Want" (All Cards)
+        const wantSelect = document.getElementById('trade-want-select');
+        wantSelect.innerHTML = '';
+        allCards.forEach(card => {
+            const opt = document.createElement('option');
+            opt.value = card.id;
+            opt.innerText = card.name;
+            wantSelect.appendChild(opt);
+        });
+    },
+
+    stageItem(type) {
+        const selectId = type === 'give' ? 'trade-give-select' : 'trade-want-select';
+        const val = document.getElementById(selectId).value;
+        if(!val) return;
+
+        const cardId = parseInt(val);
+
+        if (type === 'give') {
+            // Check if user actually owns enough copies to add another one
+            const currentStagedCount = this.stagedOffer.filter(id => id === cardId).length;
+            const ownedCount = myInventory.filter(id => id === cardId).length;
+            
+            if (currentStagedCount >= ownedCount) {
+                alert("You don't have anymore copies of this card!");
+                return;
+            }
+            this.stagedOffer.push(cardId);
+        } else {
+            this.stagedRequest.push(cardId);
+        }
+        this.renderStaged();
+    },
+
+    unstageItem(type, index) {
+        if(type === 'give') this.stagedOffer.splice(index, 1);
+        else this.stagedRequest.splice(index, 1);
+        this.renderStaged();
+    },
+
+    renderStaged() {
+        // Helper to render a list of IDs
+        const renderList = (ids, containerId, type) => {
+            const container = document.getElementById(containerId);
+            container.innerHTML = '';
+            ids.forEach((id, index) => {
+                const card = allCards.find(c => c.id === id);
+                if(!card) return;
+                
+                const badge = document.createElement('div');
+                badge.style.cssText = "background:#333; border:1px solid #555; padding:2px 8px; font-size:0.8rem; border-radius:4px; cursor:pointer; display:flex; align-items:center; gap:5px;";
+                badge.innerHTML = `<img src="${card.image_url}" style="width:20px; height:20px; object-fit:cover;"> ${card.name} <span style="color:red; font-weight:bold;">×</span>`;
+                badge.title = "Click to remove";
+                badge.onclick = () => this.unstageItem(type, index);
+                container.appendChild(badge);
+            });
+        };
+
+        renderList(this.stagedOffer, 'staged-give-list', 'give');
+        renderList(this.stagedRequest, 'staged-want-list', 'want');
+    },
+
+    async create() {
+        if (this.stagedOffer.length === 0 || this.stagedRequest.length === 0) {
+            alert("Please add at least one card to both sides.");
+            return;
+        }
+
+        const { error } = await client.from('trades').insert({
+            user_id: currentUser.id,
+            offer_card_ids: this.stagedOffer,
+            request_card_ids: this.stagedRequest
+        });
+
+        if(error) {
+            alert("Error creating trade: " + error.message);
+        } else {
+            alert("Trade Posted!");
+            this.resetStaging();
+            this.loadTrades();
+        }
+    },
+
+    async loadTrades() {
+        const list = document.getElementById('trade-list');
+        list.innerHTML = '<div style="color:#888;">Loading market...</div>';
+
+        const { data: trades } = await client.from('trades').select('*').order('created_at', {ascending: false});
+        
+        list.innerHTML = '';
+        if(!trades || trades.length === 0) {
+            list.innerHTML = '<div style="color:#888;">No active trades.</div>';
+            return;
+        }
+
+        trades.forEach(t => {
+            const isMyTrade = t.user_id === currentUser.id;
+
+            // Helper to generate visual HTML for a list of IDs
+            const generateCardHtml = (ids) => {
+                // Count occurrences: {1: 2, 5: 1} -> 2x CardA, 1x CardB
+                const counts = {};
+                ids.forEach(id => counts[id] = (counts[id] || 0) + 1);
+                
+                let html = '<div style="display:flex; gap:10px; flex-wrap:wrap;">';
+                for(const [id, count] of Object.entries(counts)) {
+                    const c = allCards.find(x => x.id == id);
+                    if(c) {
+                        html += `
+                            <div style="text-align:center;">
+                                <div style="position:relative; width:40px; height:40px;">
+                                    <img src="${c.image_url}" style="width:100%; height:100%; object-fit:cover; border-radius:4px; border:1px solid #555;">
+                                    <div style="position:absolute; bottom:-5px; right:-5px; background:black; color:white; font-size:10px; padding:2px 4px; border-radius:4px; border:1px solid #fff;">x${count}</div>
+                                </div>
+                            </div>
+                        `;
+                    }
+                }
+                html += '</div>';
+                return html;
+            };
+
+            // Check Ownership for Buttons
+            let canAfford = true;
+            // Need to check if I have every card in request_card_ids
+            const myCounts = {};
+            myInventory.forEach(id => myCounts[id] = (myCounts[id] || 0) + 1);
+            
+            const reqCounts = {};
+            t.request_card_ids.forEach(id => reqCounts[id] = (reqCounts[id] || 0) + 1);
+
+            for(const [id, reqAmt] of Object.entries(reqCounts)) {
+                if ((myCounts[id] || 0) < reqAmt) {
+                    canAfford = false; 
+                    break;
+                }
+            }
+
+            const row = document.createElement('div');
+            row.className = 'log-entry'; 
+            row.style.display = 'grid';
+            row.style.gridTemplateColumns = "1fr 30px 1fr 100px";
+            row.style.gap = "10px";
+            row.style.alignItems = 'center';
+            row.style.border = '1px solid #444';
+            row.style.padding = '10px';
+            row.style.marginBottom = '10px';
+
+            let actionBtn = '';
+            if (isMyTrade) {
+                actionBtn = `<button onclick="tradeSystem.cancel('${t.id}')" style="background:red; color:white; padding:5px 10px; width:100%;">Cancel</button>`;
+            } else {
+                if (canAfford) {
+                    actionBtn = `<button onclick="tradeSystem.accept('${t.id}')" class="btn-gold" style="font-size:0.8rem; padding:10px; width:100%;">ACCEPT</button>`;
+                } else {
+                    actionBtn = `<button disabled style="background:#222; color:#555; cursor:not-allowed; padding:10px; width:100%; border:1px solid #333;">Missing Cards</button>`;
+                }
+            }
+
+            row.innerHTML = `
+                <div>
+                    <div style="font-size:0.7rem; color:cyan; margin-bottom:5px;">GET:</div>
+                    ${generateCardHtml(t.offer_card_ids)}
+                </div>
+                <div style="display:flex; align-items:center; justify-content:center; color:#888;">➡️</div>
+                <div>
+                    <div style="font-size:0.7rem; color:var(--gold); margin-bottom:5px;">GIVE:</div>
+                    ${generateCardHtml(t.request_card_ids)}
+                </div>
+                <div style="display:flex; align-items:center;">
+                    ${actionBtn}
+                </div>
+            `;
+            list.appendChild(row);
+        });
+    },
+
+    async accept(tradeId) {
+        if(!confirm("Are you sure you want to complete this trade?")) return;
+
+        const { data: result, error } = await client.rpc('accept_trade_multi', { 
+            p_trade_id: tradeId, 
+            p_acceptor_id: currentUser.id 
+        });
+
+        if(error) {
+            console.error(error);
+            alert("Trade failed: " + error.message);
+        } else if (result === 'success') {
+            alert("Trade Complete!");
+            await app.loadGameData(); // Refresh inventory
+            deckBuilder.render(); 
+            this.loadTrades();
+            this.populateDropdowns();
+        } else {
+            alert(result); // e.g., 'Trade Creator is missing cards'
+            this.loadTrades(); 
+        }
+    },
+
+    async cancel(tradeId) {
+        if(!confirm("Cancel this offer?")) return;
+        await client.from('trades').delete().eq('id', tradeId);
+        this.loadTrades();
+    }
+};
+ 
+        const shop = {
+            show() { document.getElementById('shop-container').scrollIntoView(); this.render(); },
+            refresh() { this.render(); },
+            render() {
+                const container = document.getElementById('shop-container');
+                container.innerHTML = '<h3>Card Gallery</h3><div id="shop-grid" style="display:flex; gap:10px; overflow-x:auto;"></div>';
+                const grid = document.getElementById('shop-grid');
+                
+                allCards.forEach(card => {
+                    const isOwned = myInventory.includes(card.id);
+                    const div = document.createElement('div');
+                    div.className = 'shop-card';
+                    // Buttons are now disabled and informational only
+                    div.innerHTML = `
+                        <img src="${card.image_url}" alt="${card.name}">
+                        <h4>${card.name}</h4>
+                        <div class="price-tag" style="font-size:0.8rem; color:#888;">Rarity Value: ${card.price}</div>
+                        <button disabled style="background: ${isOwned ? '#4CAF50' : '#333'}; color: ${isOwned ? 'white' : '#888'}; cursor: default;">
+                            ${isOwned ? 'OWNED' : 'Found in Packs'}
+                        </button>
+                    `;
+                    grid.appendChild(div);
+                });
+            }
+        };
+
+        // --- GACHA SYSTEM (WEIGHTED) ---
+        const gachaSystem = {
+            show() {
+                document.getElementById('gacha-screen').classList.remove('hidden');
+                document.getElementById('gacha-display-area').innerHTML = '<div style="color:#666; font-style:italic;">Contains 3 random cards...<br>Rare cards are harder to find!</div>';
+                document.getElementById('gacha-status').innerText = "";
+            },
+            
+            // Helper: Select a card based on Inverse Price Weighting
+            pickWeightedCard() {
+                // Calculate weights: 
+                // Formula: 1000 / (price + 50). 
+                // Examples:
+                // Price 0 -> Weight 20
+                // Price 100 -> Weight 6.6
+                // Price 1000 -> Weight 0.95
+                // Cheap cards are ~20x more common than expensive ones.
+                
+                const weights = allCards.map(c => 1000 / (c.price + 50));
+                const totalWeight = weights.reduce((sum, w) => sum + w, 0);
+                
+                let random = Math.random() * totalWeight;
+                
+                for(let i = 0; i < allCards.length; i++) {
+                    if (random < weights[i]) return allCards[i];
+                    random -= weights[i];
+                }
+                return allCards[0]; // Fallback
+            },
+
+            async buyPack() {
+                const PRICE = 100;
+                if (currentUser.coins < PRICE) { alert("Not enough coins! Need 100."); return; }
+                
+                document.getElementById('gacha-status').innerText = "Opening...";
+
+                // 1. Pick 3 Random Cards using Weighted Logic
+                const rewards = [];
+                for(let i=0; i<3; i++) {
+                    rewards.push(this.pickWeightedCard());
+                }
+
+                // 2. Database Update (Deduct Coins + Insert Cards)
+                // A. Update Coins
+                const newBalance = currentUser.coins - PRICE;
+                const { error: coinErr } = await client.from('users').update({ coins: newBalance }).eq('id', currentUser.id);
+                
+                if (coinErr) { alert("Transaction Error"); return; }
+                currentUser.coins = newBalance;
+                document.getElementById('coin-display').innerText = newBalance;
+
+                // B. Insert Cards
+                const inserts = rewards.map(c => ({ user_id: currentUser.id, card_id: c.id }));
+                const { error: cardErr } = await client.from('user_cards').insert(inserts);
+
+                if (cardErr) { console.error(cardErr); alert("Error adding cards, contact admin."); return; }
+
+                // 3. Update Local State
+                rewards.forEach(c => myInventory.push(c.id));
+                deckBuilder.render(); // Refresh deck builder
+                shop.render(); // Refresh gallery
+
+                // 4. Animation
+                const area = document.getElementById('gacha-display-area');
+                area.innerHTML = '';
+                
+                rewards.forEach((card, index) => {
+                    setTimeout(() => {
+                        const el = document.createElement('div');
+                        el.className = 'shop-card gacha-card-anim';
+                        el.style.width = '120px';
+                        el.innerHTML = `
+                            <img src="${card.image_url}" style="height:80px; width:100%; object-fit:cover;">
+                            <h4 style="margin-top:5px; color:var(--gold);">${card.name}</h4>
+                            <div style="font-size:0.7rem; color:#aaa;">Val: ${card.price}</div>
+                        `;
+                        area.appendChild(el);
+                    }, index * 300); // Stagger animations
+                });
+
+                document.getElementById('gacha-status').innerText = "Pack Opened!";
+            }
+        };
+        // --- DECK BUILDER SYSTEM ---
+const deckBuilder = {
+    show() {
+        const modal = document.getElementById('deck-editor');
+        if (!modal) {
+            console.error("Error: HTML element 'deck-editor' not found.");
+            return;
+        }
+        modal.classList.remove('hidden');
+        this.render();
+    },
+
+    hide() {
+        document.getElementById('deck-editor').classList.add('hidden');
+    },
+
+    add(cardId) {
+        if (!myDeck) myDeck = [];
+        if (!myInventory) myInventory = [];
+
+        const inDeck = myDeck.filter(id => id === cardId).length;
+        const owned = myInventory.filter(id => id === cardId).length;
+        
+        if (inDeck >= owned) { 
+            alert(`You only own ${owned} copies of this card! Open packs to get more.`); 
+            return; 
+        }
+        
+        if (inDeck >= 3) { 
+            alert("Max 3 copies of any card allowed in a deck!"); 
+            return; 
+        }
+
+        myDeck.push(cardId);
+        this.saveLocal();
+        this.render();
+    },
+
+    remove(index) {
+        myDeck.splice(index, 1);
+        this.saveLocal();
+        this.render();
+    },
+
+    saveLocal() {
+        if(currentUser && currentUser.id) {
+            localStorage.setItem(`deck_config_${currentUser.id}`, JSON.stringify(myDeck));
+        }
+    },
+
+    render() {
+        if (!allCards || allCards.length === 0) return;
+        if (!myDeck) myDeck = [];
+
+        document.getElementById('deck-count').innerText = myDeck.length;
+        
+        // --- A. Render Active Deck ---
+        const activeGrid = document.getElementById('active-deck-grid');
+        activeGrid.innerHTML = '';
+        
+        myDeck.forEach((id, index) => {
+            const card = allCards.find(c => c.id === id);
+            if(!card) return;
+
+            const el = document.createElement('div');
+            el.className = 'shop-card'; 
+            el.style.border = '1px solid lime';
+            el.style.cursor = 'pointer';
+            el.style.height = 'auto'; // Allow height to grow
+            el.title = "Click to remove";
+            
+            // Added Description Here
+            el.innerHTML = `
+                <div style="font-size:0.7rem; font-weight:bold; color:var(--gold);">${card.name}</div>
+                <img src="${card.image_url}" style="height:60px; object-fit:cover; margin: 5px 0;">
+                <div style="font-size:0.6rem; color:#aaa; font-style:italic; line-height:1.2;">${card.description || ''}</div>
+            `;
+            el.onclick = () => this.remove(index);
+            activeGrid.appendChild(el);
+        });
+
+        // --- B. Render Collection (Inventory) ---
+        const collectionGrid = document.getElementById('collection-grid');
+        collectionGrid.innerHTML = '';
+        
+        const uniqueOwned = [...new Set(myInventory)];
+        
+        uniqueOwned.forEach(id => {
+            const card = allCards.find(c => c.id === id);
+            if(!card) return;
+            
+            const inDeckCount = myDeck.filter(x => x === id).length;
+            const totalOwned = myInventory.filter(x => x === id).length;
+            
+            const el = document.createElement('div');
+            el.className = 'shop-card';
+            el.style.height = 'auto'; // Allow height to grow
+            
+            const isMaxed = inDeckCount >= totalOwned;
+            el.style.opacity = isMaxed ? '0.4' : '1';
+            el.style.cursor = isMaxed ? 'default' : 'pointer';
+            
+            // Added Description Here
+            el.innerHTML = `
+                <div style="font-size:0.7rem; font-weight:bold;">${card.name}</div>
+                <img src="${card.image_url}" style="height:60px; object-fit:cover; margin: 5px 0;">
+                <div style="font-size:0.6rem; color:#ccc; margin-bottom:4px; font-style:italic; line-height:1.2;">${card.description || ''}</div>
+                <div style="font-size:0.7rem; color:${isMaxed ? '#ff4444' : '#888'}; font-weight:bold;">
+                    ${inDeckCount} / ${totalOwned}
+                </div>
+            `;
+            
+            if (!isMaxed) {
+                el.onclick = () => this.add(id);
+            }
+            collectionGrid.appendChild(el);
+        });
+    }
+};
+ 
+        const game = {
+    state: null,
+    opponentName: null,
+    turnTimer: null,
+    timeLeft: 30,
+
+    async start(matchId, role, deck) {
+        currentMatchId = matchId;
+        myRole = role;
+        this.opponentName = null;
+        this.stopTurnTimer();
+
+        document.getElementById('lobby-screen').classList.add('hidden');
+        document.getElementById('game-ui').style.display = 'grid';
+        document.getElementById('enemy-username').innerText = "Waiting for player...";
+        document.getElementById('battlefield').innerHTML = ''; 
+
+        client.channel(matchId)
+            .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches', filter: `id=eq.${matchId}` }, 
+            payload => this.onUpdate(payload.new))
+            .subscribe();
+
+        if (pollingInterval) clearInterval(pollingInterval);
+        pollingInterval = setInterval(async () => {
+            const { data } = await client.from('matches').select('*').eq('id', matchId).single();
+            if (data) this.onUpdate(data);
+        }, 3000);
+
+        if(deck && deck.length > 0) {
+            deck.sort(() => Math.random() - 0.5);
+            let { data: m } = await client.from('matches').select('*').eq('id', matchId).single();
+            let s = m.game_state;
+            
+            s[role].deck = deck;
+            s[role].original_deck = [...deck];
+            s[role].hand = [];
+            s[role].buffs = [];
+            s[role].shield = 0;
+            s[role].locked_card_names = [];
+            s[role].banned_cards = [];
+            s[role].is_stunned = false;
+
+            // --- NEW VARIABLES INITIALIZATION ---
+            s[role].is_blinded = false; // For Hayden
+            s[role].tired_turns = 0;    // For Camden
+            // ------------------------------------
+            
+            for(let i=0; i<3; i++) if(s[role].deck.length>0) s[role].hand.push(s[role].deck.pop());
+            
+            await client.from('matches').update({ game_state: s }).eq('id', matchId);
+        } else {
+            let { data } = await client.from('matches').select('*').eq('id', matchId).single();
+            this.onUpdate(data);
+        }
+    },
+
+    startTurnTimer() {
+        if (this.turnTimer) return; 
+        this.timeLeft = 30; 
+        this.updateTimerDisplay();
+
+        this.turnTimer = setInterval(() => {
+            this.timeLeft--;
+            this.updateTimerDisplay();
+            if (this.timeLeft <= 0) {
+                this.stopTurnTimer();
+                this.endTurn(true); 
+            }
+        }, 1000);
+    },
+
+    stopTurnTimer() {
+        if (this.turnTimer) {
+            clearInterval(this.turnTimer);
+            this.turnTimer = null;
+        }
+        const display = document.getElementById('timer-display');
+        if(display) display.innerText = "--";
+    },
+
+    updateTimerDisplay() {
+        const display = document.getElementById('timer-display');
+        if (!display) return;
+        display.innerText = this.timeLeft;
+        if (this.timeLeft <= 5) {
+            display.style.color = "red";
+        } else {
+            display.style.color = "white";
+        }
+    },
+
+    async onUpdate(matchData) {
+        this.state = matchData.game_state;
+        if (matchData.status !== 'waiting' && pollingInterval) { clearInterval(pollingInterval); pollingInterval = null; }
+
+        if (matchData.status === 'active' && !this.opponentName) {
+            const oppId = matchData.player1_id === currentUser.id ? matchData.player2_id : matchData.player1_id;
+            if (oppId) {
+                const { data: user } = await client.from('users').select('username').eq('id', oppId).single();
+                this.opponentName = user ? user.username : "Unknown Opponent";
+                document.getElementById('enemy-username').innerText = this.opponentName;
+            }
+        }
+
+        if (matchData.status === 'finished') {
+            this.stopTurnTimer();
+            const won = matchData.winner_id === currentUser.id;
+            alert(won ? "VICTORY! +50 Coins" : "DEFEAT. +25 Coins");
+            app.refreshUserStats();
+            document.getElementById('game-ui').style.display = 'none';
+            document.getElementById('lobby-screen').classList.remove('hidden');
+            document.getElementById('find-match-btn').disabled = false;
+            client.removeAllChannels();
+            if (pollingInterval) clearInterval(pollingInterval);
+            return;
+        }
+
+        const logBox = document.getElementById('battlefield');
+        if (logBox.lastElementChild?.innerText !== this.state.lastLog) {
+            const div = document.createElement('div');
+            div.className = 'log-entry';
+            div.innerText = this.state.lastLog;
+            logBox.appendChild(div);
+            logBox.scrollTop = logBox.scrollHeight;
+        }
+
+        const me = this.state[myRole];
+        const oppRole = myRole === 'p1' ? 'p2' : 'p1';
+        const opp = this.state[oppRole];
+
+        // --- HAYDEN FIX: Handle undefined state gracefully ---
+        // If I am blinded, I see ??? for MY health.
+        if (me.is_blinded === true) {
+            document.getElementById('my-hp').innerHTML = `??? <span style="color:cyan">(???)</span>`;
+        } else {
+            document.getElementById('my-hp').innerHTML = `${me.hp} <span style="color:cyan">(${me.shield}🛡️)</span>`;
+        }
+        // ----------------------------------------------------
+
+        document.getElementById('my-mana').innerText = me.mana;
+        
+        let buffText = me.buffs.length ? me.buffs.join(', ') : '';
+        if (me.is_stunned) buffText += " ⛔ STUNNED";
+        // Camden UI Check
+        if (me.tired_turns > 0) buffText += ` 😴 TIRED (${me.tired_turns})`;
+        // Hayden UI Check
+        if (me.is_blinded) buffText += ` 🙈 BLINDED`; 
+        
+        if (me.locked_card_names.length > 0) buffText += ` 🔒 LOCKED: ${me.locked_card_names.join(', ')}`;
+        document.getElementById('my-buffs').innerText = buffText || 'None';
+        
+        document.getElementById('enemy-hp').innerHTML = `${opp.hp} <span style="color:cyan">(${opp.shield}🛡️)</span>`;
+
+        const isMyTurn = matchData.current_turn === currentUser.id;
+        const turnDisplay = document.getElementById('turn-display');
+
+        if (matchData.status === 'waiting') {
+            turnDisplay.innerText = "WAITING FOR P2...";
+        } else if (matchData.status === 'active') {
+            if (isMyTurn) {
+                turnDisplay.innerText = "YOUR TURN";
+                turnDisplay.style.color = "var(--accent)";
+                this.startTurnTimer();
+            } else {
+                turnDisplay.innerText = "OPPONENT'S TURN";
+                turnDisplay.style.color = "#888";
+                this.stopTurnTimer();
+            }
+        }
+
+        document.getElementById('end-turn-btn').disabled = !isMyTurn;
+        const forfeitBtn = document.getElementById('forfeit-btn');
+        if(forfeitBtn) forfeitBtn.disabled = matchData.status !== 'active';
+
+        const handDiv = document.getElementById('hand');
+        handDiv.innerHTML = '';
+        me.hand.forEach((card, idx) => {
+            const el = document.createElement('div');
+            el.className = 'card';
+            
+            const isLocked = me.locked_card_names.includes(card.name);
+            
+            // Camden Logic (Tired)
+            const isTired = (me.tired_turns || 0) > 0 && card.cost >= 3;
+
+            if (isLocked || isTired) {
+                el.style.opacity = 0.3; el.style.filter = "grayscale(100%)"; 
+                el.style.border = "1px solid red";
+                el.style.cursor = 'not-allowed';
+            } else if (!isMyTurn || me.mana < card.cost) {
+                el.style.opacity = 0.5; el.style.cursor = 'not-allowed';
+            } else {
+                el.onclick = () => this.playCard(idx);
+            }
+            
+            let statusIcon = '';
+            if (isLocked) statusIcon = '🔒';
+            if (isTired) statusIcon = '😴';
+
+            const iconHtml = statusIcon ? `<div style="position:absolute; top:40%; left:35%; font-size:40px;">${statusIcon}</div>` : '';
+            
+            el.innerHTML = `<div class="card-cost">${card.cost}</div><img src="${card.image_url}" alt="art">${iconHtml}<div style="padding:4px;"><h4>${card.name}</h4><p>${card.description}</p></div>`;
+            handDiv.appendChild(el);
+        });
+    },
+
+    async playCard(idx) {
+        const me = this.state[myRole];
+        if (this.state.lastLog.includes("ended turn") && this.state.lastLog.includes(currentUser.username)) return;
+        
+        const card = me.hand[idx];
+
+        // --- CAMDEN CHECK ---
+        if (me.tired_turns > 0 && card.cost >= 3) {
+            alert("You are TIRED! Cannot play cards costing 3 or more.");
+            return;
+        }
+        // --------------------
+
+        if (me.mana < card.cost) return;
+        if (me.locked_card_names.includes(card.name)) {
+            alert("LOCKED by IT! Play Luke to free."); return;
+        }
+
+        const oppRole = myRole === 'p1' ? 'p2' : 'p1';
+        const opp = this.state[oppRole];
+
+        if (me.is_stunned && card.type === 'Attack') { alert("You are STUNNED!"); return; }
+
+        if (me.buffs.includes('Matthew Curse') && card.type === 'Attack') {
+            if (Math.random() < 0.20) {
+                me.mana -= card.cost;
+                me.hand.splice(idx, 1);
+                this.state.lastLog = `${currentUser.username} tried ${card.name} but MISSED (Matthew)!`;
+                await this.syncState();
+                return;
+            }
+        }
+
+        me.mana -= card.cost;
+        me.hand.splice(idx, 1);
+        let log = `${currentUser.username} used ${card.name}.`;
+
+        const applyDamage = (amount) => {
+             if (me.buffs.includes('AI Boost')) {
+                amount *= 2;
+                me.buffs = me.buffs.filter(b => b !== 'AI Boost'); 
+                log += ` (AI Boost x2)`;
+            }
+            let remaining = amount;
+            if (opp.shield > 0) {
+                if (opp.shield >= amount) {
+                    opp.shield -= amount; remaining = 0; log += ` (Blocked by Shield)`;
+                } else {
+                    remaining -= opp.shield; opp.shield = 0; log += ` (Shield Broken!)`;
+                }
+            }
+            opp.hp -= remaining;
+            return amount;
+        };
+
+        // --- NEW CARD LOGIC ---
+
+        if (card.name === 'APUSH Assignment') {
+            // 30 dmg to shield only, no spillover
+            const dmg = 30;
+            if (opp.shield > 0) {
+                opp.shield = Math.max(0, opp.shield - dmg);
+                log += ` Dealt 30 damage to Shield! (Health unaffected)`;
+            } else {
+                log += ` Missed! (Opponent had no shield)`;
+            }
+        }
+        else if (card.name === 'Graduation') {
+            const targets = ['Dusty', 'Carve'];
+            let removedCount = 0;
+            
+            // Remove from hand
+            const initialHand = opp.hand.length;
+            opp.hand = opp.hand.filter(c => !targets.includes(c.name));
+            removedCount += (initialHand - opp.hand.length);
+
+            // Remove from deck
+            const initialDeck = opp.deck.length;
+            opp.deck = opp.deck.filter(c => !targets.includes(c.name));
+            removedCount += (initialDeck - opp.deck.length);
+            
+            // Remove from original deck (so reshuffles don't bring them back)
+            if(opp.original_deck) {
+                opp.original_deck = opp.original_deck.filter(c => !targets.includes(c.name));
+            }
+
+            log += ` Removed ${removedCount} 'Dusty'/'Carve' cards from Opponent!`;
+        }
+        else if (card.name === 'Hayden') {
+            opp.is_blinded = true;
+            log += ` Hayden stole the opponent's HP display!`;
+        }
+        else if (card.name === 'Camden') {
+            opp.tired_turns = 2;
+            log += ` Applied TIRED. Opponent can't play 3-cost cards for 2 turns.`;
+        }
+        else if (card.name === 'Fun Friday!') {
+            // MODIFIED LOGIC: Stun + 10 Shield Dmg
+            opp.is_stunned = true;
+            if (opp.shield > 0) {
+                 opp.shield = Math.max(0, opp.shield - 10);
+                 log += ` Opponent STUNNED and Shield took 10 DMG.`;
+            } else {
+                 log += ` Opponent STUNNED.`;
+            }
+        }
+        // --- Existing Cards ---
+        else if (card.name === 'Tetanus') {
+            const nerdList = ['Luke', 'Matthew', 'Previous Owner', 'Carve', 'Dusty', 'DinoShark'];
+            let added = [];
+            for(let i=0; i<2; i++) {
+                const randomName = nerdList[Math.floor(Math.random() * nerdList.length)];
+                const nerdCard = allCards.find(c => c.name === randomName);
+                if (nerdCard) { me.hand.push(nerdCard); added.push(nerdCard.name); }
+            }
+            log += ` Summoned ${added.join(' & ')}!`;
+        }
+        else if (card.name === 'Dusty') { me.shield += card.value; log += ` Gained ${card.value} Shield.`; }
+        else if (card.name === 'DinoShark') { me.shield += card.value; log += ` Gained ${card.value} Shield.`; }
+        else if (card.name === 'ChatGPT') { me.buffs.push('AI Boost'); log += ` AI LOADING... Next attack x2 Damage.`; }
+        else if (card.name === 'IT') {
+            applyDamage(3);
+            if (opp.hand.length > 0) {
+                const validTargets = opp.hand.filter(c => c.name !== 'Luke');
+                if (validTargets.length > 0) {
+                    const randomCard = validTargets[Math.floor(Math.random() * validTargets.length)];
+                    if (!opp.locked_card_names.includes(randomCard.name)) {
+                        opp.locked_card_names.push(randomCard.name);
+                        log += ` LOCKED all '${randomCard.name}' cards!`;
+                    }
+                }
+            }
+        }
+        else if (card.name === 'Luke') {
+            if (me.locked_card_names.length > 0) { me.locked_card_names = []; log += ` UNLOCKED all cards!`; }
+            const enemyHasIt = opp.deck.some(c => c.name === 'IT') || opp.hand.some(c => c.name === 'IT');
+            let dmg = 5;
+            if (enemyHasIt) { dmg *= 2; log += ` CRIT (Enemy has IT)!`; }
+            applyDamage(dmg);
+        }
+        else if (card.name === 'Justin') {
+            if (opp.buffs.length > 0) {
+                const stolenBuffs = [...opp.buffs];
+                me.buffs.push(...stolenBuffs);       
+                opp.buffs = [];                   
+                log += ` Stole active buffs: ${stolenBuffs.join(', ')}!`;
+            }
+        }
+        else if (card.name === 'Actual Tetanus') { opp.buffs.push('Tetanus Poison'); log += ` Infected opponent.`; }
+        else if (card.name === 'School Nurse') {
+            let cleansed = [];
+            if (me.buffs.includes('Tetanus Poison')) { me.buffs = me.buffs.filter(b => b !== 'Tetanus Poison'); cleansed.push("Tetanus"); }
+            if (me.is_stunned) { me.is_stunned = false; cleansed.push("Stun"); }
+            if (me.locked_card_names.length > 0) { me.locked_card_names = []; cleansed.push("Locks"); }
+            if (me.buffs.includes('Matthew Curse')) { me.buffs = me.buffs.filter(b => b !== 'Matthew Curse'); cleansed.push("Curse"); }
+            if (me.is_blinded) { me.is_blinded = false; cleansed.push("Blindness"); } // Cleanse Hayden effect too?
+            
+            log += cleansed.length > 0 ? ` Cleansed: ${cleansed.join(', ')}.` : ` Applied bandage.`;
+            
+            const icePack = { id: 'ice', name: 'Ice Pack', cost: 1, type: 'Junk', image_url: 'https://placehold.co/100x140/87CEEB/white?text=Ice', value: 0, description: 'Play to remove.' };
+            me.hand.push(icePack); me.hand.push(icePack);
+        }
+        else if (card.name === 'Matthew') { if (!opp.buffs.includes('Matthew Curse')) { opp.buffs.push('Matthew Curse'); log += ` Cursed opponent.`; } }
+        else if (card.name === 'Carve') {
+            let dmg = card.value;
+            if (me.buffs.includes('Previous Owner')) { dmg *= 2; me.buffs = me.buffs.filter(b => b !== 'Previous Owner'); log += ` (Previous Owner Buff)`; }
+            applyDamage(dmg);
+        }
+        else if (card.name === 'Previous Owner') { me.buffs.push('Previous Owner'); }
+        else if (card.name === 'Ms. Norris') { 
+            if (!opp.banned_cards) opp.banned_cards = [];
+            if (opp.hand.length > 0) {
+                const rIdx = Math.floor(Math.random() * opp.hand.length);
+                const victimCard = opp.hand[rIdx];
+                opp.banned_cards.push(victimCard.name);
+                opp.hand.splice(rIdx, 1);
+                log += ` Ms. Norris snatched ${victimCard.name}!`; 
+            } else { log += ` Ms. Norris hissed!`; }
+        }
+        else {
+            if (card.type === 'Attack') { let dmg = applyDamage(card.value); log += ` Dealt ${dmg} dmg.`; }
+            if (card.type === 'Heal') { me.hp += card.value; log += ` Healed ${card.value}.`; }
+        }
+
+        this.state.lastLog = log;
+        await this.syncState();
+    },
+    
+    async forfeit() {
+        this.stopTurnTimer();
+        if(!confirm("Are you sure you want to surrender?")) return;
+        let { data: m } = await client.from('matches').select('*').eq('id', currentMatchId).single();
+        if(!m || m.status !== 'active') return;
+        const winnerId = m.player1_id === currentUser.id ? m.player2_id : m.player1_id;
+        await client.rpc('end_match', { p_match_id: currentMatchId, p_winner_id: winnerId });
+    },
+
+    async endTurn(isForced = false) {
+        this.stopTurnTimer();
+        
+        const me = this.state[myRole];
+        const oppRole = myRole === 'p1' ? 'p2' : 'p1';
+        const opp = this.state[oppRole];
+
+        // --- FIX: Clean up YOUR effects, don't touch the opponent's yet ---
+        
+        // 1. If *I* was tired, tick it down now that I've finished my turn
+        if (me.tired_turns > 0) {
+            me.tired_turns--;
+        }
+
+        // 2. If *I* was stunned, I've served my time. I am free for next round.
+        // (Do NOT clear opp.is_stunned here, or the stun you just threw will vanish!)
+        me.is_stunned = false; 
+
+        // 3. Reset Next Player's Mana
+        opp.mana = 3; 
+        // ------------------------------------------------------------------
+
+        // Poison Logic (remains on the opponent because it hurts them at start of their turn)
+        const poisonStacks = opp.buffs.filter(b => b === 'Tetanus Poison').length;
+        let turnLog = isForced ? `${currentUser.username} ran out of time!` : `${currentUser.username} ended turn.`;
+
+        if (poisonStacks > 0) {
+            const dmg = poisonStacks * 3;
+            opp.hp -= dmg;
+            turnLog += ` Tetanus Poison dealt ${dmg} damage!`;
+            if (opp.hp <= 0) {
+                 await client.rpc('end_match', { p_match_id: currentMatchId, p_winner_id: currentUser.id });
+                 return;
+            }
+        }
+
+        // Deck Reshuffle Logic
+        if (opp.deck.length === 0 && opp.original_deck) {
+            opp.deck = [...opp.original_deck];
+            opp.deck.sort(() => Math.random() - 0.5); 
+        }
+
+        // Draw Cards for Opponent
+        for (let i = 0; i < 2; i++) {
+            if(opp.deck.length > 0 && opp.hand.length < 5) {
+                const drawnCard = opp.deck.pop();
+                const bannedList = opp.banned_cards || [];
+                if (bannedList.includes(drawnCard.name)) {
+                    turnLog += ` (Opponent tried to draw ${drawnCard.name}, blocked by Ms. Norris!)`;
+                } else {
+                    opp.hand.push(drawnCard);
+                }
+            }
+        }
+
+        this.state.lastLog = turnLog;
+        let { data: m } = await client.from('matches').select('*').eq('id', currentMatchId).single();
+        const nextTurnId = m.player1_id === currentUser.id ? m.player2_id : m.player1_id;
+
+        await client.from('matches').update({ 
+            game_state: this.state,
+            current_turn: nextTurnId
+        }).eq('id', currentMatchId);
+    },
+
+    async syncState() {
+        const oppRole = myRole === 'p1' ? 'p2' : 'p1';
+        if (this.state[oppRole].hp <= 0) {
+            this.stopTurnTimer();
+            await client.rpc('end_match', { p_match_id: currentMatchId, p_winner_id: currentUser.id });
+        } else {
+            await client.from('matches').update({ game_state: this.state }).eq('id', currentMatchId);
+        }
+    }
+}; // <--- End of game object
+ 
+        window.onload = app.init();
+    </script>
+</body>
+</html>

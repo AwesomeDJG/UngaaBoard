@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sign Up</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="shortcut icon" href="logo.png" type="image/x-icon">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="theme.js" defer></script>
+</head>
+<body class="narrow-view">
+
+<h2>Create Account</h2>
+
+<input id="username" placeholder="Username">
+<input id="password" placeholder="Password" type="password">
+<button onclick="signup()">Sign Up</button>
+
+<div id="status">Waiting…</div>
+
+<script>
+/* SUPABASE CLIENT (singleton) */
+if (!window.supabaseClient) {
+    window.supabaseClient = window.supabase.createClient(
+        "https://gftohejwfjstfhkfmyjd.supabase.co",
+        "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmdG9oZWp3ZmpzdGZoa2ZteWpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMxMjk0NjgsImV4cCI6MjA3ODcwNTQ2OH0.Zq7E-xAknaZBDkCN6IecWqsDc20vTVuNt54MBWNATdY"
+    );
+}
+const client = window.supabaseClient;
+
+async function signup() {
+    const status = document.getElementById("status");
+    status.textContent = "Starting signup…";
+
+    const username = document.getElementById("username").value.trim();
+    const password = document.getElementById("password").value;
+
+    if (!username || !password) {
+        status.textContent = "❌ Missing username or password";
+        return;
+    }
+
+    status.textContent = "Checking username availability…";
+
+    // 0) Check if username already exists
+    const { data: existingUser, error: existingErr } = await client
+        .from("users")
+        .select("id")
+        .eq("username", username)
+        .maybeSingle();
+
+    if (existingUser) {
+        status.textContent = "❌ That username is already taken.";
+        return;
+    }
+
+    status.textContent = "Hashing password…";
+
+    // simple hash replacement
+    const password_hash = await sha256(password);
+
+    status.textContent = 
+        "Sending request...\n\n" +
+        "username: " + username + "\n" +
+        "password_hash: " + password_hash + "\n\n(Waiting for Supabase…)";
+
+    // 1) Insert user
+    const { data: newUser, error: userError } = await client
+        .from("users")
+        .insert([{ username, password_hash }])
+        .select()
+        .single();
+
+    if (userError) {
+        status.textContent = "❌ Signup failed:\n" + userError.message;
+        return;
+    }
+
+    status.textContent = "User created, creating profile…";
+
+    // 2) Insert matching profile
+    const { error: profileError } = await client
+        .from("profiles")
+        .insert([
+            {
+                user_id: newUser.id,
+                username: newUser.username,
+                bio: "",
+                avatar_url: ""
+            }
+        ]);
+
+    if (profileError) {
+        status.textContent = 
+            "⚠️ User created but profile creation failed:\n" + profileError.message;
+        return;
+    }
+
+    status.textContent = "✅ Signup successful!\nRedirecting…";
+
+    setTimeout(() => {
+        window.location.href = "signin.html";
+    }, 1500);
+}
+
+async function sha256(msg) {
+    const m = new TextEncoder().encode(msg);
+    const h = await crypto.subtle.digest("SHA-256", m);
+    return Array.from(new Uint8Array(h))
+        .map(b => b.toString(16).padStart(2, "0"))
+        .join("");
+}
+</script>
+
+<body>
+    <canvas id="bgParticles"></canvas>
+    <script src="particles.js" defer></script>
+
+    <div class="container">

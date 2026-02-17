@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Following</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="shortcut icon" href="logo.png" type="image/x-icon">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    .userRow { display:flex; align-items:center; padding:10px; border:1px solid #ddd; border-radius:6px; background:white; margin-bottom:10px; }
+    .avatar { width:50px; height:50px; border-radius:50%; background:#3498db; color:white; display:flex; justify-content:center; align-items:center; font-size:20px; margin-right:12px; overflow:hidden; }
+    .avatar img { width:100%; height:100%; object-fit:cover; border-radius:50%; }
+  </style>
+  <script src="theme.js" defer></script>
+</head>
+<body class="very-narrow-layout">
+
+<h2>Following</h2>
+<div id="error"></div>
+<div id="list">Loading…</div>
+
+<script>
+/* SUPABASE CLIENT (singleton) */
+if (!window.supabaseClient) {
+  window.supabaseClient = window['supabase'].createClient(
+    "https://gftohejwfjstfhkfmyjd.supabase.co",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmdG9oZWp3ZmpzdGZoa2ZteWpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMxMjk0NjgsImV4cCI6MjA3ODcwNTQ2OH0.Zq7E-xAknaZBDkCN6IecWqsDc20vTVuNt54MBWNATdY"
+  );
+}
+const client = window.supabaseClient;
+
+function showError(msg) {
+  let e = document.getElementById("error");
+  e.textContent = msg;
+  e.style.display = "block";
+}
+
+const params = new URLSearchParams(location.search);
+const profileId = params.get("id");
+
+if (!profileId) showError("Missing user ID in URL.");
+
+async function loadFollowing() {
+  const list = document.getElementById("list");
+
+  // 1) get users this user follows
+  const { data: rows, error } = await client
+    .from("follows")
+    .select("following_id")
+    .eq("follower_id", profileId);
+
+  if (error) return showError("Failed to load following.");
+
+  if (!rows.length) {
+    list.textContent = "Not following anyone.";
+    return;
+  }
+
+  const followingIds = rows.map(r => r.following_id);
+
+  // 2) fetch profile info for those
+  const { data: profiles } = await client
+    .from("profiles")
+    .select("user_id, username, avatar_url")
+    .in("user_id", followingIds);
+
+  list.innerHTML = "";
+
+    profiles.forEach(p => {
+      const div = document.createElement("div");
+      div.className = "userRow";
+
+      let avatar = p.avatar_url
+        ? `<img src="${p.avatar_url}">`
+        : p.username[0].toUpperCase();
+
+      div.innerHTML = `
+        <div class="avatar avatar-small">${avatar}</div>
+        <div>
+          <a href="profile.html?id=${p.user_id}">
+            ${p.username}
+          </a>
+        </div>
+      `;
+
+      list.appendChild(div);
+    });
+}
+
+loadFollowing();
+</script>
+<body>
+  <canvas id="bgParticles"></canvas>
+
+<div id="pspWaves" class="wave-container">
+  <div class="wave"></div>
+  <div class="wave"></div>
+</div>
+  <script src="particles.js" defer></script>
+
+<div class="container">
+<script>
+(function() {
+  // 1. READ SETTINGS
+  const mode = localStorage.getItem('theme_bg_preference') || 'particles';
+  const fontData = localStorage.getItem('custom_font_data');
+
+  // 2. APPLY BACKGROUND
+  const particles = document.getElementById('bgParticles');
+  const waves = document.getElementById('pspWaves');
+
+  if (mode === 'waves') {
+    document.body.classList.add('mode-waves');
+    if(particles) particles.style.display = 'none';
+    if(waves) waves.style.display = 'block';
+  } else {
+    document.body.classList.remove('mode-waves');
+    if(particles) particles.style.display = 'block';
+    if(waves) waves.style.display = 'none';
+  }
+
+  // 3. APPLY FONT
+  if (fontData) {
+    try {
+      const fontFace = new FontFace('CustomUserFont', `url(${fontData})`);
+      fontFace.load().then(f => {
+        document.fonts.add(f);
+        document.documentElement.style.setProperty('--font-main', 'CustomUserFont, system-ui, sans-serif');
+      });
+    } catch(e) { console.log('Font load error'); }
+  }
+})();
+</script>

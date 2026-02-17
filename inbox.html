@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Inbox</title>
+  <link rel="stylesheet" href="styles.css">
+  <link rel="shortcut icon" href="logo.png" type="image/x-icon">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="theme.js" defer></script>
+</head>
+<body>
+<h2>Inbox</h2>
+<div id="status"></div>
+<div id="threads">Loading…</div>
+
+<script>
+/* SUPABASE CLIENT (singleton) */
+if (!window.supabaseClient) {
+  window.supabaseClient = window.supabase.createClient(
+    "https://gftohejwfjstfhkfmyjd.supabase.co",
+    "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdmdG9oZWp3ZmpzdGZoa2ZteWpkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMxMjk0NjgsImV4cCI6MjA3ODcwNTQ2OH0.Zq7E-xAknaZBDkCN6IecWqsDc20vTVuNt54MBWNATdY"
+  );
+}
+const client = window.supabaseClient;
+
+function getLocalUser() {
+  const id = localStorage.getItem("user_id");
+  const username = localStorage.getItem("username");
+  return id && username ? { id, username } : null;
+}
+
+async function loadThreads() {
+  const me = getLocalUser();
+  if (!me) { document.getElementById("status").textContent = "You must sign in."; return; }
+
+  // Fetch DMs where me is sender or receiver, show latest per peer
+  const { data, error } = await client
+    .from("dms")
+    .select("*")
+    .or(`sender_id.eq.${me.id},receiver_id.eq.${me.id}`)
+    .order("timestamp", { ascending: false });
+
+  if (error) { document.getElementById("threads").textContent = "Failed to load DMs."; return; }
+  if (!data.length) { document.getElementById("threads").textContent = "No messages yet."; return; }
+
+  // Build map of peerId -> latest message
+  const map = {};
+  data.forEach(m => {
+    const peer = m.sender_id === me.id ? m.receiver_id : m.sender_id;
+    if (!map[peer]) map[peer] = m;
+  });
+
+  const threadsDiv = document.getElementById("threads");
+  threadsDiv.innerHTML = "";
+  for (const peerId in map) {
+    const msg = map[peerId];
+    // fetch peer username
+    const { data: user } = await client.from("users").select("username").eq("id", peerId).maybeSingle();
+    const username = user?.username || "unknown";
+    const row = document.createElement("div");
+    row.className = "thread";
+    row.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <strong>${username}</strong><br>
+          <span style="color:#666;">${msg.body.slice(0,120)}${msg.body.length>120 ? '…' : ''}</span>
+        </div>
+        <div>
+          <a class="btn" href="thread.html?peer=${peerId}">Open</a>
+        </div>
+      </div>
+    `;
+    threadsDiv.appendChild(row);
+  }
+}
+
+loadThreads();
+</script>
+<body>
+  <canvas id="bgParticles"></canvas>
+
+<div id="pspWaves" class="wave-container">
+  <div class="wave"></div>
+  <div class="wave"></div>
+</div>
+  <script src="particles.js" defer></script>
+
+<div class="container">
+<script>
+(function() {
+  // 1. READ SETTINGS
+  const mode = localStorage.getItem('theme_bg_preference') || 'particles';
+  const fontData = localStorage.getItem('custom_font_data');
+
+  // 2. APPLY BACKGROUND
+  const particles = document.getElementById('bgParticles');
+  const waves = document.getElementById('pspWaves');
+
+  if (mode === 'waves') {
+    document.body.classList.add('mode-waves');
+    if(particles) particles.style.display = 'none';
+    if(waves) waves.style.display = 'block';
+  } else {
+    document.body.classList.remove('mode-waves');
+    if(particles) particles.style.display = 'block';
+    if(waves) waves.style.display = 'none';
+  }
+
+  // 3. APPLY FONT
+  if (fontData) {
+    try {
+      const fontFace = new FontFace('CustomUserFont', `url(${fontData})`);
+      fontFace.load().then(f => {
+        document.fonts.add(f);
+        document.documentElement.style.setProperty('--font-main', 'CustomUserFont, system-ui, sans-serif');
+      });
+    } catch(e) { console.log('Font load error'); }
+  }
+})();
+</script>

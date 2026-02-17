@@ -1,0 +1,1402 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>UngaaBoard - The Tribe</title>
+
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+
+    <style>
+      :root {
+        --bg-color: #0d1117;
+        --card-bg: #161b22;
+        --border-color: #30363d;
+        --text-main: #c9d1d9;
+        --text-muted: #8b949e;
+        --accent: #58a6ff;
+        --accent-hover: #1f6feb;
+        --danger: #da3633;
+        --success: #238636;
+        --font-main: -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica,
+          Arial, sans-serif;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: var(--bg-color);
+        color: var(--text-main);
+        font-family: var(--font-main);
+        overflow-x: hidden; /* Prevent horizontal scroll */
+      }
+
+      /* LAYOUT GRID */
+      .layout {
+        display: grid;
+        grid-template-columns: 240px 1fr 280px; /* Sidebar | Feed | Right Panel */
+        gap: 20px;
+        max-width: 1280px;
+        margin: 0 auto;
+        padding: 20px;
+        min-height: 100vh;
+      }
+
+      /* SIDEBAR */
+      .sidebar {
+        position: sticky;
+        top: 20px;
+        height: fit-content;
+      }
+      .logo {
+        font-size: 24px;
+        font-weight: bold;
+        color: var(--text-main);
+        margin-bottom: 20px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .sidebar-menu {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+      }
+      .menu-item {
+        padding: 10px 15px;
+        border-radius: 6px;
+        cursor: pointer;
+        color: var(--text-main);
+        text-decoration: none;
+        transition: background 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+      .menu-item:hover {
+        background-color: var(--border-color);
+      }
+      .menu-item.active {
+        background-color: var(--border-color);
+        font-weight: 600;
+      }
+
+      /* FEED AREA */
+      .feed {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+
+      /* CREATE POST BOX */
+      .create-post-card {
+        background-color: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 15px;
+      }
+      .input-group {
+        margin-bottom: 10px;
+      }
+      .input-group input,
+      .input-group textarea,
+      .input-group select {
+        width: 100%;
+        background: #0d1117;
+        border: 1px solid var(--border-color);
+        color: var(--text-main);
+        padding: 10px;
+        border-radius: 6px;
+        font-family: inherit;
+      }
+      .input-group textarea {
+        resize: vertical;
+        min-height: 80px;
+      }
+      .post-tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 10px;
+        border-bottom: 1px solid var(--border-color);
+        padding-bottom: 5px;
+      }
+      .tab-btn {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        padding: 5px 10px;
+        font-weight: bold;
+      }
+      .tab-btn.active {
+        color: var(--accent);
+        border-bottom: 2px solid var(--accent);
+      }
+      .post-actions {
+        display: flex;
+        justify-content: flex-end;
+      }
+      .btn-primary {
+        background-color: var(--success);
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+      .btn-primary:hover {
+        background-color: #2da042;
+      }
+
+      /* SORT BAR */
+      .sort-bar {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 10px;
+      }
+      .sort-btn {
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        color: var(--text-muted);
+        padding: 5px 12px;
+        border-radius: 20px;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 600;
+      }
+      .sort-btn:hover {
+        background: var(--border-color);
+        color: var(--text-main);
+      }
+      .sortActive {
+        background: var(--border-color);
+        color: var(--text-main);
+        border-color: var(--text-muted);
+      }
+
+      /* POST CARD */
+      .post {
+        background-color: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        display: flex; /* Sidebar for votes, Main for content */
+        overflow: hidden;
+        transition: border-color 0.2s;
+        position: relative;
+      }
+      .post:hover {
+        border-color: var(--text-muted);
+      }
+      .vote-sidebar {
+        width: 40px;
+        background: #11151c;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 10px 0;
+        gap: 5px;
+        border-right: 1px solid var(--border-color);
+      }
+      .vote-btn {
+        background: none;
+        border: none;
+        color: var(--text-muted);
+        cursor: pointer;
+        font-size: 18px;
+        padding: 2px;
+      }
+      .vote-btn:hover {
+        color: var(--accent);
+        background: rgba(255, 255, 255, 0.05);
+        border-radius: 4px;
+      }
+      .vote-count {
+        font-size: 13px;
+        font-weight: bold;
+      }
+      .post-content {
+        padding: 10px 15px;
+        flex: 1;
+      }
+      .post-header {
+        font-size: 12px;
+        color: var(--text-muted);
+        margin-bottom: 6px;
+        display: flex;
+        gap: 5px;
+        align-items: center;
+      }
+      .post-channel {
+        font-weight: bold;
+        color: var(--text-main);
+      }
+      .post-author {
+        cursor: pointer;
+      }
+      .post-author:hover {
+        text-decoration: underline;
+      }
+      .post-title {
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0 0 8px 0;
+        color: var(--text-main);
+        display: block;
+        text-decoration: none;
+      }
+      .post-body {
+        font-size: 14px;
+        line-height: 1.5;
+        margin-bottom: 10px;
+        color: #b1b8c0;
+        white-space: pre-wrap; /* keep formatting */
+      }
+      .post-footer {
+        display: flex;
+        gap: 15px;
+        font-size: 12px;
+        color: var(--text-muted);
+        align-items: center;
+      }
+      .footer-item {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        cursor: pointer;
+        padding: 4px 6px;
+        border-radius: 4px;
+      }
+      .footer-item:hover {
+        background: var(--border-color);
+      }
+      .stickied {
+        border: 1px solid var(--success);
+      }
+      .locked-tag {
+        color: var(--danger);
+        border: 1px solid var(--danger);
+        padding: 1px 4px;
+        border-radius: 4px;
+        font-size: 10px;
+        margin-left: 5px;
+      }
+
+      /* POLL STYLES */
+      .poll-container {
+        background: #0d1117;
+        padding: 10px;
+        border-radius: 6px;
+        margin-bottom: 10px;
+        border: 1px solid var(--border-color);
+      }
+      .poll-option {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px;
+        border: 1px solid var(--border-color);
+        margin-bottom: 5px;
+        border-radius: 4px;
+        cursor: pointer;
+        transition: background 0.2s;
+        font-size: 14px;
+      }
+      .poll-option:hover {
+        background: var(--border-color);
+      }
+      .poll-bar-bg {
+        height: 4px;
+        background: #333;
+        border-radius: 2px;
+        margin-top: 2px;
+        width: 100%;
+        overflow: hidden;
+      }
+      .poll-bar-fill {
+        height: 100%;
+        background: var(--accent);
+      }
+
+      /* RIGHT PANEL (Info/Rules) */
+      .right-panel {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+      }
+      .info-card {
+        background-color: var(--card-bg);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        padding: 15px;
+      }
+      .info-title {
+        font-weight: bold;
+        margin-bottom: 10px;
+        padding-bottom: 5px;
+        border-bottom: 1px solid var(--border-color);
+      }
+      .rule-list {
+        list-style: decimal;
+        padding-left: 20px;
+        font-size: 13px;
+        color: var(--text-muted);
+        line-height: 1.4;
+      }
+      .rule-list li {
+        margin-bottom: 5px;
+      }
+
+      /* MODALS */
+      .modal-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        display: none; /* hidden by default */
+        justify-content: center;
+        align-items: center;
+        z-index: 1000;
+      }
+      .modal {
+        background: var(--card-bg);
+        padding: 20px;
+        border-radius: 8px;
+        width: 400px;
+        border: 1px solid var(--border-color);
+        box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+      }
+      .modal h2 {
+        margin-top: 0;
+      }
+      .modal-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 20px;
+      }
+
+      /* HOVER CARD */
+      .user-hover-card {
+        position: absolute;
+        z-index: 9999;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        width: 260px;
+        border-radius: 8px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+        padding: 15px;
+        display: none;
+        pointer-events: auto;
+      }
+      .card-header {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+      }
+      .card-avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 1px solid var(--border-color);
+      }
+      .card-username {
+        font-weight: bold;
+        font-size: 16px;
+      }
+      .card-bio {
+        font-size: 13px;
+        color: var(--text-muted);
+        margin-bottom: 10px;
+        line-height: 1.4;
+      }
+      .btn-follow {
+        width: 100%;
+        background: var(--accent);
+        color: white;
+        border: none;
+        padding: 6px;
+        border-radius: 4px;
+        cursor: pointer;
+        font-weight: bold;
+      }
+      .btn-unfollow {
+        width: 100%;
+        background: var(--card-bg);
+        border: 1px solid var(--border-color);
+        color: var(--text-muted);
+        padding: 6px;
+        border-radius: 4px;
+        cursor: pointer;
+      }
+
+      /* ADMIN / UTILS */
+      .admin-btn {
+        background: none;
+        border: none;
+        color: var(--danger);
+        cursor: pointer;
+        font-size: 11px;
+        margin-left: 10px;
+      }
+      .muted {
+        color: var(--text-muted);
+      }
+
+      /* BG EFFECTS */
+      #bgParticles {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: -1;
+        pointer-events: none;
+        /* Simple subtle grid or dots */
+        background-image: radial-gradient(#30363d 1px, transparent 1px);
+        background-size: 30px 30px;
+        opacity: 0.3;
+      }
+      .mode-waves #bgParticles {
+        display: none;
+      }
+      #pspWaves {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: -1;
+        background: linear-gradient(180deg, #0d1117 0%, #161b22 100%);
+      }
+
+      /* MOBILE RESPONSIVE */
+      @media (max-width: 900px) {
+        .layout {
+          grid-template-columns: 1fr;
+        }
+        .sidebar,
+        .right-panel {
+          display: none; /* simple mobile view hides sidebars for now */
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="bgParticles"></div>
+    <div id="pspWaves"></div>
+
+    <div class="layout">
+      <aside class="sidebar">
+        <div class="logo">
+          <span>🔥</span> UngaaBoard
+        </div>
+        <nav class="sidebar-menu">
+          <a class="menu-item active" onclick="loadPosts('all'); return false;">Home</a>
+          <a class="menu-item" href="settings.html">Settings</a>
+          <a class="menu-item" href="profile.html">My Profile</a>
+          
+          <div style="height:10px;"></div>
+          <div class="muted" style="font-size:12px; padding-left:15px; margin-bottom:5px;">CHANNELS</div>
+          <div id="channelsList">
+            </div>
+          <div 
+            class="menu-item" 
+            style="color: var(--accent); font-size:13px;" 
+            onclick="openCreateChannel()"
+          >
+            + Create Channel
+          </div>
+        </nav>
+      </aside>
+
+      <main class="feed">
+        <div class="create-post-card">
+            <div class="post-tabs">
+                <button class="tab-btn active" id="tabText" onclick="switchPostTab('text')">Text</button>
+                <button class="tab-btn" id="tabPoll" onclick="switchPostTab('poll')">Poll</button>
+            </div>
+            
+            <div class="input-group">
+                <input type="text" id="title" placeholder="Title" maxlength="100">
+            </div>
+            
+            <div class="input-group" id="textBodyGroup">
+                <textarea id="body" placeholder="Text (optional)"></textarea>
+            </div>
+
+            <div id="pollBodyGroup" style="display:none;">
+                <div class="input-group">
+                    <textarea id="pollBody" placeholder="Poll Question / Context"></textarea>
+                </div>
+                <div class="input-group">
+                   <input type="text" id="pollOpt1" placeholder="Option 1">
+                </div>
+                <div class="input-group">
+                   <input type="text" id="pollOpt2" placeholder="Option 2">
+                </div>
+                <div class="input-group">
+                   <input type="text" id="pollOpt3" placeholder="Option 3 (Optional)">
+                </div>
+                <div class="input-group">
+                   <input type="text" id="pollOpt4" placeholder="Option 4 (Optional)">
+                </div>
+            </div>
+
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <div class="input-group" style="margin-bottom:0; width: 150px;">
+                    <select id="channelSelect">
+                        <option value="">(No Channel)</option>
+                        </select>
+                </div>
+                <button class="btn-primary" onclick="createPost()">Post</button>
+            </div>
+        </div>
+
+        <div class="sort-bar">
+            <button class="sort-btn active" id="sort_new" onclick="setSort('new')">New</button>
+            <button class="sort-btn" id="sort_hot" onclick="setSort('hot')">Hot</button>
+            <button class="sort-btn" id="sort_top" onclick="setSort('top')">Top</button>
+            <span id="timeframeBox" style="display:none;">
+              <select id="timeframe" onchange="setSort('top')" style="background:#161b22; border:1px solid #30363d; color:#c9d1d9; border-radius:4px;">
+                <option value="day">Today</option>
+                <option value="week">Week</option>
+                <option value="month">Month</option>
+                <option value="year">Year</option>
+                <option value="all">All Time</option>
+              </select>
+            </span>
+            <button class="sort-btn" id="sort_comments" onclick="setSort('comments')">Most Commented</button>
+            <button class="sort-btn" id="sort_feed" onclick="setSort('feed')">My Feed</button>
+        </div>
+
+        <div id="postsContainer">
+            <div class="muted" style="text-align:center; margin-top:50px;">Loading...</div>
+        </div>
+      </main>
+
+      <aside class="right-panel">
+        <div class="info-card">
+            <div class="info-title">UngaaBoard Rules</div>
+            <ol class="rule-list">
+                <li>Be respectful to others.</li>
+                <li>No spam or self-promotion.</li>
+                <li>Post in the correct channel.</li>
+                <li>No NSFW content.</li>
+            </ol>
+        </div>
+
+        <div class="info-card">
+            <div class="info-title">About</div>
+            <p style="font-size:13px; color:var(--text-muted);">
+                UngaaBoard is a demo "Reddit-like" forum built with Supabase and vanilla JS.
+                <br><br>
+                <a href="https://github.com" target="_blank" style="color:var(--accent);">Source Code</a>
+            </p>
+        </div>
+      </aside>
+    </div>
+
+    <div class="modal-overlay" id="createChannelModal">
+        <div class="modal">
+            <h2>Create a Community</h2>
+            <div class="input-group">
+                <label style="font-size:12px; color:var(--text-muted);">Name (e.g. "technology")</label>
+                <input type="text" id="newChannelName" placeholder="Name">
+            </div>
+            <div class="input-group">
+                <label style="font-size:12px; color:var(--text-muted);">Description</label>
+                <textarea id="newChannelDesc" placeholder="What is this community about?"></textarea>
+            </div>
+            <div class="modal-actions">
+                <button class="btn-unfollow" onclick="closeCreateChannel()">Cancel</button>
+                <button class="btn-primary" onclick="createChannel()">Create</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="user-hover-card" id="userHoverCard">
+        <div id="cardContent"></div>
+    </div>
+
+    <script src="config.js"></script>
+
+    <script>
+      const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+      let currentUser = null;
+      let currentProfile = null;
+      let currentChannelId = null; // null = all
+      let activePostTab = 'text'; 
+      let currentSort = 'new';
+      let currentTimeframe = 'all'; // for 'top'
+      let followingUserIds = []; // cache who I follow
+
+      // Helper to escape HTML to prevent XSS
+      function escapeHtml(text) {
+        if (!text) return '';
+        return text
+          .replace(/&/g, "&amp;")
+          .replace(/</g, "&lt;")
+          .replace(/>/g, "&gt;")
+          .replace(/"/g, "&quot;")
+          .replace(/'/g, "&#039;");
+      }
+
+      function getCurrentUser() {
+        // We look for the sb- access token in localStorage usually managed by Supabase Auth
+        // But for this simple demo, we rely on session recovery in init()
+        return currentUser;
+      }
+
+      async function fetchCurrentProfile() {
+        const { data: { session } } = await client.auth.getSession();
+        if (!session) {
+            currentUser = null;
+            return;
+        }
+        currentUser = session.user;
+
+        // Load profile row
+        const { data } = await client
+            .from('profiles')
+            .select('*')
+            .eq('user_id', currentUser.id)
+            .maybeSingle();
+        currentProfile = data;
+
+        // Load who I follow
+        const { data: follows } = await client
+            .from('follows')
+            .select('following_id')
+            .eq('follower_id', currentUser.id);
+        
+        if (follows) {
+            followingUserIds = follows.map(f => f.following_id);
+        }
+      }
+
+      // LOAD CHANNELS
+      async function loadChannels() {
+        const { data: channels } = await client.from('channels').select('*').order('name');
+        const list = document.getElementById('channelsList');
+        const select = document.getElementById('channelSelect');
+        
+        list.innerHTML = '';
+        select.innerHTML = '<option value="">(No Channel / General)</option>';
+
+        if (channels) {
+            channels.forEach(c => {
+                // Sidebar item
+                const div = document.createElement('div');
+                div.className = 'menu-item';
+                div.textContent = `# ${c.name}`;
+                div.onclick = () => {
+                    loadPosts(c.id);
+                };
+                list.appendChild(div);
+
+                // Select option
+                const opt = document.createElement('option');
+                opt.value = c.id;
+                opt.textContent = c.name;
+                select.appendChild(opt);
+            });
+        }
+      }
+
+      function openCreateChannel() {
+        if (!currentUser) return alert("Please sign in.");
+        document.getElementById('createChannelModal').style.display = 'flex';
+      }
+      function closeCreateChannel() {
+        document.getElementById('createChannelModal').style.display = 'none';
+      }
+      async function createChannel() {
+        const name = document.getElementById('newChannelName').value.trim();
+        const desc = document.getElementById('newChannelDesc').value.trim();
+        if(!name) return alert("Name required");
+
+        const { error } = await client.from('channels').insert([{
+            name, 
+            description: desc,
+            created_by: currentUser.id
+        }]);
+
+        if(error) alert(error.message);
+        else {
+            closeCreateChannel();
+            loadChannels();
+        }
+      }
+
+      // --- TAB SWITCHING ---
+      function switchPostTab(tab) {
+        activePostTab = tab;
+        document.getElementById('tabText').classList.toggle('active', tab === 'text');
+        document.getElementById('tabPoll').classList.toggle('active', tab === 'poll');
+
+        if(tab === 'text') {
+            document.getElementById('textBodyGroup').style.display = 'block';
+            document.getElementById('pollBodyGroup').style.display = 'none';
+        } else {
+            document.getElementById('textBodyGroup').style.display = 'none';
+            document.getElementById('pollBodyGroup').style.display = 'block';
+        }
+      }
+
+      // --- SORTING ---
+      function setSort(type) {
+        currentSort = type;
+        
+        // Update UI buttons
+        ['new','hot','top','comments','feed'].forEach(s => {
+            document.getElementById(`sort_${s}`).classList.remove('active'); // fail-safe
+            document.getElementById(`sort_${s}`).classList.toggle('sortActive', s === type);
+        });
+
+        // Show/Hide timeframe for 'top'
+        if(type === 'top') {
+            document.getElementById('timeframeBox').style.display = 'inline-block';
+            currentTimeframe = document.getElementById('timeframe').value;
+        } else {
+            document.getElementById('timeframeBox').style.display = 'none';
+        }
+
+        loadPosts(currentChannelId); // reload with new sort
+      }
+
+      // --- LOAD POSTS ---
+      async function loadPosts(channelIdOrFilter) {
+        // Handle argument: if it's "all" string, clear channel. If number, set channel.
+        if (channelIdOrFilter === 'all') currentChannelId = null;
+        else if (typeof channelIdOrFilter === 'number') currentChannelId = channelIdOrFilter;
+        
+        const container = document.getElementById('postsContainer');
+        container.innerHTML = '<div class="muted" style="text-align:center; padding:20px;">Loading posts...</div>';
+
+        // 1. Base Query
+        let query = client.from('messages').select(`
+            *,
+            profiles:user_id ( username, avatar_url, banned ),
+            channel:channel_id ( name )
+        `);
+
+        // 2. Filter by Channel
+        if (currentChannelId) {
+            query = query.eq('channel_id', currentChannelId);
+        }
+
+        // 3. Apply Sorting
+        if (currentSort === 'new') {
+            query = query.order('timestamp', { ascending: false });
+        } 
+        else if (currentSort === 'hot') {
+            // "Hot" = mostly new + mostly upvoted. 
+            // Simplified here: sorting by a calculated score is hard in simple Supabase query without RPC.
+            // We'll approximate 'hot' as high uptoes created recently? 
+            // For this demo, let's just sort by uptoes for now, or use a client-side sort if data is small.
+            // Let's do Order by Uptoes desc, then Timestamp desc
+            query = query.order('uptoes', { ascending: false }).order('timestamp', { ascending: false });
+        }
+        else if (currentSort === 'top') {
+            // Apply Timeframe filter
+            const now = Date.now();
+            let cutoff = 0;
+            const oneDay = 24*60*60*1000;
+            if(currentTimeframe === 'day') cutoff = now - oneDay;
+            else if(currentTimeframe === 'week') cutoff = now - 7*oneDay;
+            else if(currentTimeframe === 'month') cutoff = now - 30*oneDay;
+            else if(currentTimeframe === 'year') cutoff = now - 365*oneDay;
+            // 'all' = 0
+
+            if(cutoff > 0) {
+                query = query.gte('timestamp', cutoff);
+            }
+            query = query.order('uptoes', { ascending: false });
+        }
+        else if (currentSort === 'comments') {
+            // We don't have a comment_count column on messages table in this simple schema?
+            // If we don't, we can't sort efficiently server-side. 
+            // We'll fallback to 'new' or if you added a comment_count column, sort by that.
+            query = query.order('timestamp', { ascending: false }); 
+        }
+        else if (currentSort === 'feed') {
+            // Only posts from people I follow
+            if(followingUserIds.length === 0) {
+                container.innerHTML = '<div class="muted" style="padding:20px; text-align:center;">You are not following anyone.</div>';
+                return;
+            }
+            // Supabase "in" filter for array
+            // Note: If array is huge, this fails. Real apps use join tables.
+            query = query.in('user_id', followingUserIds).order('timestamp', { ascending: false });
+        }
+
+        // 4. Fetch
+        const { data: posts, error } = await query.limit(50); // limit 50 for performance
+
+        if (error) {
+            container.innerHTML = `<div class="muted">Error: ${error.message}</div>`;
+            return;
+        }
+
+        container.innerHTML = '';
+        if (!posts || posts.length === 0) {
+            container.innerHTML = '<div class="muted" style="text-align:center; padding:30px;">No posts found.</div>';
+            return;
+        }
+
+        // 5. Render
+        posts.forEach(post => {
+            // Skip banned user posts if not admin? Or just hide content.
+            if(post.profiles && post.profiles.banned) return; 
+
+            const el = document.createElement('div');
+            el.className = `post ${post.is_global_pinned ? 'stickied' : ''}`;
+            
+            // Calculate Score
+            const score = (post.uptoes || 0) - (post.downtoes || 0);
+            
+            // Check if I voted
+            let myVote = null;
+            if(currentUser && post.voters) {
+                const v = post.voters.find(x => x.user_id === currentUser.id);
+                if(v) myVote = v.vote;
+            }
+
+            const upColor = myVote === 'up' ? 'color:var(--danger);' : '';
+            const downColor = myVote === 'down' ? 'color:#718096;' : ''; // or blue
+            
+            // Lock status
+            const lockHtml = post.is_locked ? `<span class="locked-tag">🔒 Locked</span>` : '';
+            const pinHtml = post.is_global_pinned ? `<span style="color:var(--success); font-size:10px; border:1px solid var(--success); padding:1px 3px; border-radius:3px; margin-left:5px;">PINNED</span>` : '';
+
+            // Body Content (Text vs Poll)
+            let bodyContent = '';
+            if(post.is_poll && post.poll_data) {
+                // Render Poll
+                const opts = post.poll_data.options || [];
+                let totalVotes = 0;
+                opts.forEach(o => totalVotes += (o.count||0));
+                
+                let optsHtml = '';
+                opts.forEach((o, idx) => {
+                    const pct = totalVotes === 0 ? 0 : Math.round((o.count / totalVotes) * 100);
+                    optsHtml += `
+                    <div class="poll-option" onclick="votePoll('${post.id}', ${idx})">
+                        <div style="display:flex; justify-content:space-between; width:100%;">
+                            <span>${escapeHtml(o.text)}</span>
+                            <span>${pct}% (${o.count})</span>
+                        </div>
+                    </div>
+                    <div class="poll-bar-bg"><div class="poll-bar-fill" style="width:${pct}%"></div></div>
+                    `;
+                });
+                bodyContent = `
+                    <div class="post-body">${escapeHtml(post.body || '')}</div>
+                    <div class="poll-container">
+                        ${optsHtml}
+                        <div style="font-size:11px; color:var(--text-muted); margin-top:5px;">
+                            Total Votes: ${totalVotes}
+                        </div>
+                    </div>
+                `;
+            } else {
+                // Regular Text
+                // Simple truncate if too long for preview?
+                bodyContent = `<div class="post-body">${escapeHtml(post.body)}</div>`;
+            }
+
+            // Date
+            const dateStr = new Date(post.timestamp).toLocaleString();
+            
+            // Channel Name
+            const chanName = post.channel ? `c/${post.channel.name}` : 'General';
+
+            // Admin buttons
+            let adminBtns = '';
+            if(currentProfile && currentProfile.is_admin) {
+                adminBtns = `
+                    <button class="admin-btn" onclick="adminDeletePost('${post.id}')">Del</button>
+                    <button class="admin-btn" onclick="adminToggleGlobalPin('${post.id}', ${!post.is_global_pinned})">Pin</button>
+                    <button class="admin-btn" onclick="adminLockPost('${post.id}', ${!post.is_locked})">Lock</button>
+                    <button class="admin-btn" onclick="adminBanUser('${post.user_id}')">BanUser</button>
+                `;
+            } else if (currentUser && post.user_id === currentUser.id) {
+                adminBtns = `<button class="admin-btn" onclick="deletePost('${post.id}')">Delete</button>`;
+            }
+
+            el.innerHTML = `
+                <div class="vote-sidebar">
+                    <button class="vote-btn" style="${upColor}" onclick="vote('${post.id}', 'up')">▲</button>
+                    <span class="vote-count" id="post_uptoes_${post.id}">${post.uptoes || 0}</span>
+                    <button class="vote-btn" style="${downColor}" onclick="vote('${post.id}', 'down')">▼</button>
+                    <span class="vote-count" style="font-size:10px; color:var(--text-muted);" id="post_downtoes_${post.id}">${post.downtoes || 0}</span>
+                </div>
+                <div class="post-content">
+                    <div class="post-header">
+                        <span class="post-channel">${chanName}</span>
+                        <span>•</span>
+                        <span class="muted">Posted by</span>
+                        <span class="post-author userHoverTrigger" data-userid="${post.user_id}">
+                            u/${post.profiles ? escapeHtml(post.profiles.username) : 'unknown'}
+                        </span>
+                        <span class="muted" title="${dateStr}">${timeAgo(post.timestamp)}</span>
+                        ${lockHtml}
+                        ${pinHtml}
+                    </div>
+                    
+                    <a href="post.html?id=${post.id}" class="post-title">${escapeHtml(post.title)}</a>
+                    
+                    ${bodyContent}
+
+                    <div class="post-footer">
+                        <div class="footer-item" onclick="window.location.href='post.html?id=${post.id}'">
+                            💬 Comments
+                        </div>
+                        <div class="footer-item">
+                            Share
+                        </div>
+                        ${adminBtns}
+                    </div>
+                </div>
+            `;
+            container.appendChild(el);
+        });
+      }
+
+      function timeAgo(ts) {
+        const seconds = Math.floor((Date.now() - ts) / 1000);
+        let interval = seconds / 31536000;
+        if (interval > 1) return Math.floor(interval) + "y ago";
+        interval = seconds / 2592000;
+        if (interval > 1) return Math.floor(interval) + "mo ago";
+        interval = seconds / 86400;
+        if (interval > 1) return Math.floor(interval) + "d ago";
+        interval = seconds / 3600;
+        if (interval > 1) return Math.floor(interval) + "h ago";
+        interval = seconds / 60;
+        if (interval > 1) return Math.floor(interval) + "m ago";
+        return "Just now";
+      }
+
+      // --- ACTIONS ---
+      async function createPost() {
+        const user = getCurrentUser();
+        if(!user) return alert("You must sign in.");
+        await fetchCurrentProfile();
+        if(currentProfile?.banned) return alert("You are banned.");
+
+        const title = document.getElementById('title').value.trim();
+        const channelIdVal = document.getElementById('channelSelect').value || null;
+        const channel_id = (channelIdVal === '' || channelIdVal === null) ? null : Number(channelIdVal);
+
+        if(!title) return alert("Title is required.");
+
+        let body = '';
+        let is_poll = false;
+        let poll_data = null;
+
+        if(activePostTab === 'text') {
+            body = document.getElementById('body').value.trim();
+            if(!body) return alert("Body is required.");
+        } else if(activePostTab === 'poll') {
+            body = document.getElementById('pollBody').value.trim();
+            const o1 = document.getElementById('pollOpt1').value.trim();
+            const o2 = document.getElementById('pollOpt2').value.trim();
+            const o3 = document.getElementById('pollOpt3').value.trim();
+            const o4 = document.getElementById('pollOpt4').value.trim();
+
+            if(!o1 || !o2) return alert("Polls need at least 2 options.");
+            
+            const opts = [];
+            [o1,o2,o3,o4].forEach(o => {
+                if(o) opts.push({ text: o, count: 0 });
+            });
+            
+            is_poll = true;
+            poll_data = {
+                options: opts,
+                voters: [] // Store array of user_ids who voted in the poll
+            };
+        }
+
+        await client.from('messages').insert([{
+            title,
+            body,
+            user_id: user.id,
+            timestamp: Date.now(),
+            uptoes: 0,
+            downtoes: 0,
+            voters: [],
+            channel_id,
+            is_poll,
+            poll_data
+        }]);
+
+        // clear inputs
+        document.getElementById('title').value = '';
+        document.getElementById('body').value = '';
+        document.getElementById('pollBody').value = '';
+        document.getElementById('pollOpt1').value = '';
+        document.getElementById('pollOpt2').value = '';
+        document.getElementById('pollOpt3').value = '';
+        document.getElementById('pollOpt4').value = '';
+        switchPostTab('text'); // reset
+
+        await loadPosts();
+      }
+
+      /* VOTE (Main Post Up/Down)
+      */
+      async function vote(postId, type) {
+        const user = getCurrentUser();
+        if(!user) return alert("Sign in first.");
+        await fetchCurrentProfile();
+        if(currentProfile?.banned) return alert("Banned.");
+
+        const { data: post } = await client.from('messages').select('*').eq('id', postId).maybeSingle();
+        if(!post) {
+            alert("Post not found.");
+            return;
+        }
+
+        let voters = post.voters || [];
+        let up = Number(post.uptoes) || 0;
+        let down = Number(post.downtoes) || 0;
+        
+        const idx = voters.findIndex(v => v.user_id === user.id);
+        
+        if (idx >= 0 && voters[idx].vote === type) {
+            // Removing vote
+            voters.splice(idx, 1);
+            if(type === 'up') up = Math.max(0, up - 1);
+            else down = Math.max(0, down - 1);
+        } else {
+            // Changing or Adding
+            if(idx >= 0) {
+                const prev = voters[idx].vote;
+                if(prev === 'up') up = Math.max(0, up - 1);
+                else down = Math.max(0, down - 1);
+                voters.splice(idx, 1);
+            }
+            voters.push({ user_id: user.id, vote: type });
+            if(type === 'up') up++;
+            else down++;
+        }
+
+        await client.from('messages').update({ voters, uptoes: up, downtoes: down }).eq('id', postId);
+        
+        // Update DOM locally
+        const upEl = document.getElementById(`post_uptoes_${postId}`);
+        const downEl = document.getElementById(`post_downtoes_${postId}`);
+        if(upEl) upEl.textContent = up;
+        if(downEl) downEl.textContent = down;
+
+        // --- BADGE CHECK TRIGGER ---
+        // If this was an upvote, check if the AUTHOR of the post earned a badge
+        if (type === 'up' && window.checkAndAwardBadges) {
+            checkAndAwardBadges(post.user_id, 'uptoes');
+        }
+      }
+
+      /* VOTE (Poll)
+      */
+      async function votePoll(postId, optionIdx) {
+        const user = getCurrentUser();
+        if(!user) return alert("Sign in to vote on polls.");
+        
+        // Get fresh data
+        const { data: post } = await client.from('messages').select('poll_data').eq('id', postId).maybeSingle();
+        if(!post || !post.poll_data) return;
+        
+        const pollData = post.poll_data;
+        if(pollData.voters && pollData.voters.includes(user.id)) return alert("You already voted in this poll.");
+
+        // Update local object
+        pollData.options[optionIdx].count++;
+        if(!pollData.voters) pollData.voters = [];
+        pollData.voters.push(user.id);
+
+        // Write back
+        const { error } = await client.from('messages').update({ poll_data: pollData }).eq('id', postId);
+        if(error) {
+            alert("Vote failed: " + error.message);
+        } else {
+            await loadPosts();
+        }
+      }
+
+      // ADMIN ACTIONS
+      async function adminDeletePost(id) {
+        if(!confirm("Admin Delete?")) return;
+        await client.from('messages').delete().eq('id', id);
+        loadPosts();
+      }
+      async function adminToggleGlobalPin(id, state) {
+        await client.from('messages').update({ is_global_pinned: state }).eq('id', id);
+        loadPosts();
+      }
+      async function adminLockPost(id, state) {
+        await client.from('messages').update({ is_locked: state }).eq('id', id);
+        loadPosts();
+      }
+      async function adminBanUser(targetId) {
+        if(!confirm("Ban this user permanently?")) return;
+        await client.from('profiles').update({ banned: true }).eq('user_id', targetId);
+        alert("User banned.");
+      }
+      async function deletePost(id) {
+        if(!confirm("Delete your post?")) return;
+        await client.from('messages').delete().eq('id', id);
+        loadPosts();
+      }
+
+      /* HOVER CARD LOGIC 
+      */
+      let hoverTimeout;
+      const hoverCard = document.getElementById('userHoverCard');
+      const cardContent = document.getElementById('cardContent');
+
+      document.body.addEventListener('mouseover', (e) => {
+        if(e.target.classList.contains('userHoverTrigger')) {
+            clearTimeout(hoverTimeout);
+            const userId = e.target.getAttribute('data-userid');
+            const rect = e.target.getBoundingClientRect();
+            showHoverCard(userId, rect);
+        } else if (hoverCard.contains(e.target) || e.target === hoverCard) {
+            clearTimeout(hoverTimeout);
+        }
+      });
+
+      document.body.addEventListener('mouseout', (e) => {
+        if(e.target.classList.contains('userHoverTrigger') || hoverCard.contains(e.target) || e.target === hoverCard) {
+            hoverTimeout = setTimeout(() => {
+                hoverCard.style.display = 'none';
+            }, 300);
+        }
+      });
+
+      // Updated showHoverCard with Badge Support
+      async function showHoverCard(targetUserId, rect) {
+        // 1. Position the card
+        hoverCard.style.top = (window.scrollY + rect.bottom + 5) + 'px';
+        hoverCard.style.left = (window.scrollX + rect.left) + 'px';
+        hoverCard.style.display = 'block';
+
+        cardContent.innerHTML = '<div class="muted">Loading bio...</div>';
+
+        const currentUser = getCurrentUser();
+
+        // 2. Fetch Data in Parallel (Profile + Badges)
+        const [profileRes, badgeRes] = await Promise.all([
+             client.from('profiles').select('*').eq('user_id', targetUserId).maybeSingle(),
+             client.from('user_badges').select('*') 
+        ]);
+
+        const profile = profileRes.data;
+        const allBadges = badgeRes.data || [];
+
+        if (profileRes.error || !profile) {
+          cardContent.innerHTML = '<div class="muted">User not found</div>';
+          return;
+        }
+
+        // 3. Process Badges (Client-Side Filter)
+        const userBadges = allBadges.filter(badge => {
+            let holders = badge.holders;
+            // Safety check for format
+            if (typeof holders === 'string') {
+                try { holders = JSON.parse(holders); } catch (e) { return false; }
+            }
+            return Array.isArray(holders) && holders.includes(targetUserId);
+        });
+
+        // Generate Badge HTML
+        let badgesHtml = '';
+        if (userBadges.length > 0) {
+            badgesHtml = '<div style="margin-top:4px; display:flex; gap:4px; flex-wrap:wrap;">';
+            userBadges.forEach(b => {
+                const colorStyle = b.color ? `border-color:${b.color}; color:${b.color};` : '';
+                let imgHtml = '';
+                if (b.image_url) {
+                    imgHtml = `<img src="${b.image_url}" style="width:12px; height:12px; object-fit:contain; display:block;">`;
+                }
+                badgesHtml += `
+                    <span class="badge" style="font-size:10px; padding:2px 5px; border:1px solid #ccc; border-radius:4px; display:inline-flex; align-items:center; gap:4px; ${colorStyle}">
+                        ${imgHtml}
+                        ${escapeHtml(b.label)}
+                    </span>`;
+            });
+            badgesHtml += '</div>';
+        }
+
+        // 4. Check Follow Status
+        let isFollowing = false;
+        if (currentUser && currentUser.id !== targetUserId) {
+          const { data: followData } = await client
+            .from('follows')
+            .select('*')
+            .match({ follower_id: currentUser.id, following_id: targetUserId })
+            .maybeSingle();
+          if (followData) isFollowing = true;
+        }
+
+        // 5. Build Final Content
+        const bioText = profile.bio
+          ? escapeHtml(profile.bio)
+          : '<span class="muted">No bio available.</span>';
+        const pfp = profile.avatar_url || 'https://via.placeholder.com/50';
+
+        let btnHtml = '';
+        if (!currentUser)
+          btnHtml = '<div class="muted" style="font-size:12px;">Sign in to follow</div>';
+        else if (currentUser.id === targetUserId)
+          btnHtml = '<div class="muted" style="font-size:12px;">This is you</div>';
+        else {
+          if (isFollowing)
+            btnHtml = `<button class="btn-unfollow" onclick="toggleFollowFromCard('${targetUserId}', false)">Unfollow</button>`;
+          else
+            btnHtml = `<button class="btn-follow" onclick="toggleFollowFromCard('${targetUserId}', true)">Follow</button>`;
+        }
+
+        cardContent.innerHTML = `
+        <div class="card-header">
+          <img src="${escapeHtml(pfp)}" class="card-avatar">
+          <div>
+            <div class="card-username">u/${escapeHtml(profile.username)}</div>
+            ${badgesHtml} 
+          </div>
+        </div>
+        <div class="card-bio">${bioText}</div>
+        ${btnHtml}
+      `;
+      }
+
+      async function toggleFollowFromCard(targetId, doFollow) {
+        const user = getCurrentUser();
+        if(!user) return;
+
+        cardContent.innerHTML += ' <span class="muted" style="font-size:10px;">Processing...</span>';
+        if(doFollow) {
+            await client.from('follows').insert([{
+                follower_id: user.id,
+                following_id: targetId,
+                created_at: new Date()
+            }]);
+            
+            // --- BADGE CHECK TRIGGER ---
+            if (window.checkAndAwardBadges) {
+                checkAndAwardBadges(targetId, 'followers');
+            }
+
+            followingUserIds.push(String(targetId));
+        } else {
+            await client.from('follows').delete().match({ follower_id: user.id, following_id: targetId });
+            followingUserIds = followingUserIds.filter(id => id !== String(targetId));
+        }
+
+        // Redraw button logic locally so we don't have to refetch
+        // (Simplified by just closing or refreshing card, but let's update button text)
+        const btn = hoverCard.querySelector('button');
+        if(btn) {
+            if(doFollow) {
+                btn.className = 'btn-unfollow';
+                btn.textContent = 'Unfollow';
+                btn.onclick = () => toggleFollowFromCard(targetId, false);
+            } else {
+                btn.className = 'btn-follow';
+                btn.textContent = 'Follow';
+                btn.onclick = () => toggleFollowFromCard(targetId, true);
+            }
+        }
+        // Remove "Processing..."
+        const spans = cardContent.querySelectorAll('span');
+        if(spans.length > 0) spans[spans.length-1].remove();
+      }
+
+      /* INIT 
+      */
+      async function init() {
+        const tfEl = document.getElementById('timeframe');
+        if(tfEl) tfEl.value = currentTimeframe || 'all';
+        if(currentSort === 'top') document.getElementById('timeframeBox').style.display = 'inline-block';
+
+        setTimeout(() => {
+            ['new','hot','top','comments','feed'].forEach(s => {
+                const btn = document.getElementById(`sort_${s}`);
+                if(btn) btn.classList.toggle('sortActive', s === currentSort);
+            });
+        }, 0);
+
+        await fetchCurrentProfile(); // this sets currentUser
+        await loadChannels();
+        await loadPosts();
+      }
+
+      // Exports for inline onclicks
+      window.setSort = setSort;
+      window.loadPosts = loadPosts;
+      window.createChannel = createChannel;
+      window.openCreateChannel = openCreateChannel;
+      window.closeCreateChannel = closeCreateChannel;
+      window.createPost = createPost;
+      window.deletePost = deletePost;
+      window.vote = vote;
+      window.adminDeletePost = adminDeletePost;
+      window.adminToggleGlobalPin = adminToggleGlobalPin;
+      window.adminLockPost = adminLockPost;
+      window.adminBanUser = adminBanUser;
+      window.toggleFollowFromCard = toggleFollowFromCard;
+      window.switchPostTab = switchPostTab;
+      window.votePoll = votePoll;
+
+      init();
+    </script>
+
+    <script src="theme.js" defer></script>
+    <script>
+      (function(){
+        // 1. READ SETTINGS
+        const mode = localStorage.getItem('theme_bg_preference') || 'particles';
+        const fontData = localStorage.getItem('custom_font_data');
+        
+        // 2. APPLY BACKGROUND
+        const particles = document.getElementById('bgParticles');
+        const waves = document.getElementById('pspWaves');
+
+        if(mode === 'waves') {
+          document.body.classList.add('mode-waves');
+          if(particles) particles.style.display = 'none';
+          if(waves) waves.style.display = 'block';
+        } else {
+          document.body.classList.remove('mode-waves');
+          if(particles) particles.style.display = 'block';
+          if(waves) waves.style.display = 'none';
+        }
+
+        // 3. APPLY FONT
+        if(fontData) {
+            try {
+                const fontFace = new FontFace('CustomUserFont', `url(${fontData})`);
+                fontFace.load().then(f => {
+                    document.fonts.add(f);
+                    document.documentElement.style.setProperty('--font-main', 'CustomUserFont, system-ui, sans-serif');
+                });
+            } catch(e) { console.log("Font load error"); }
+        }
+      })();
+    </script>
+    
+    <script src="autoBadges.js"></script>
+  </body>
+</html>

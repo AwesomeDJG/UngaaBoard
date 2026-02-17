@@ -1,0 +1,544 @@
+/* ====== Theme Variables ====== */
+:root {
+  --bg: #0f1115;
+  --bg-soft: #14171d;
+  --card: #161a21;
+  --card-hover: #1c202a;
+  --border: #262b36;
+  --text: #e6e6eb;
+  --muted: #9aa0aa;
+  --accent: #4f8cff;
+  --accent-2: #7c6cff;
+  --danger: #ff5c5c;
+  --success: #2ecc71;
+  --shadow: 0 10px 30px rgba(0,0,0,.35);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --transition: 0.18s ease;
+}
+
+/* ====== Base Layout ====== */
+body {
+  overflow-x: hidden;
+  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+  max-width: 1100px;
+  margin: 30px auto;
+  background: radial-gradient(1200px 600px at top, #141824, var(--bg));
+  color: var(--text);
+  display: flex;
+  gap: 24px;
+}
+
+body.narrow-layout,
+body.very-narrow-layout {
+  display: block;
+  margin: 30px auto;
+}
+
+body.narrow-layout { max-width: 900px; }
+body.very-narrow-layout { max-width: 700px; }
+
+/* ====== Links ====== */
+a {
+  color: var(--accent);
+  text-decoration: none;
+  transition: color var(--transition);
+}
+a:hover { color: #7aa7ff; }
+
+/* ====== Inputs & Buttons ====== */
+button {
+  padding: 9px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: linear-gradient(180deg, #1b1f29, #141823);
+  color: var(--text);
+  cursor: pointer;
+  transition: transform var(--transition), box-shadow var(--transition), background var(--transition);
+}
+button:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+  background: #1f2430;
+}
+button:active { transform: translateY(0); }
+
+input, textarea, select {
+  width: 100%;
+  padding: 10px;
+  margin: 6px 0;
+  background: #0f131c;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+}
+input::placeholder,
+textarea::placeholder { color: var(--muted); }
+
+/* ====== Alerts ====== */
+#error, #status {
+  background: linear-gradient(180deg, #ff5c5c, #e64545);
+  color: #fff;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  display: none;
+  margin-bottom: 14px;
+  animation: fadeIn .3s ease;
+}
+
+/* ====== Avatars ====== */
+.pfp, .avatar img {
+  border-radius: 50%;
+  object-fit: cover;
+  border: 1px solid var(--border);
+}
+
+/* Standard avatar size (posts, comments, lists) */
+.avatar {
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+  margin-right: 10px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, var(--accent), var(--accent-2));
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+/* Small inline avatars */
+.avatar-small,
+.pfp {
+  width: 32px;
+  height: 32px;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* Profile page large avatar only */
+.profile-header .avatar,
+#profileBanner + .channelHead .avatar {
+  width: 96px;
+  height: 96px;
+  font-size: 36px;
+}
+
+/* ====== Posts & Comments ====== */
+.post, .comment {
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 16px;
+  margin-top: 18px;
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--shadow);
+  animation: slideUp .25s ease;
+  max-width: 100%;
+}
+
+.post:hover {
+  background: var(--card-hover);
+}
+
+.post-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.post-meta, .metaSmall {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.post-body, .comment-body {
+  margin-top: 10px;
+  white-space: pre-wrap;
+  line-height: 1.55;
+  font-size: 15px;
+}
+
+/* ====== Images ====== */
+/* Keep images at their original/smaller sizes but cap to container width when necessary */
+.embedded-image img,
+.auto-image {
+  width: auto;        /* don't force full width */
+  max-width: 100%;    /* but don't overflow container */
+  height: auto;       /* preserve aspect ratio */
+  max-height: none;   /* allow natural height (no forced cropping) */
+  border-radius: var(--radius);
+  margin-top: 10px;
+  border: 1px solid var(--border);
+}
+
+/* Generic fallback: images should not be forcibly stretched */
+img {
+  width: auto;
+  max-width: 100%;
+  height: auto;
+}
+
+/* ====== Voting ====== */
+.voteRow, .voteBox {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.voteBtn {
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  background: #0f131c;
+  border: 1px solid var(--border);
+  transition: background var(--transition), transform var(--transition);
+}
+.voteBtn:hover {
+  background: #1b2030;
+  transform: scale(1.05);
+}
+
+.voted-up { color: var(--success); font-weight: 600; }
+.voted-down { color: var(--danger); font-weight: 600; }
+
+/* ====== Sidebar ====== */
+.main { flex: 1; min-width: 0; }
+.sidebar {
+  width: 320px;
+  max-width: 320px;
+  flex-shrink: 0;
+}
+
+.channelsWidget {
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 14px;
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+}
+
+.channelItem {
+  padding: 10px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: background var(--transition), transform var(--transition);
+}
+.channelItem:hover {
+  background: #1d2230;
+  transform: translateX(3px);
+}
+.channelItem a {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* ====== UI Blocks ====== */
+#userBox,
+#postBox,
+.sortBar {
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 14px;
+  border-radius: var(--radius);
+  margin-bottom: 18px;
+  box-shadow: var(--shadow);
+}
+
+/* ====== Profile ====== */
+#bioBox {
+  background: var(--card);
+  border-radius: var(--radius);
+  padding: 14px;
+  border: 1px solid var(--border);
+}
+
+.edit-btn, .follow-btn, .dm-btn {
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-weight: 600;
+  color: #fff;
+  transition: transform var(--transition), box-shadow var(--transition);
+}
+.edit-btn, .follow-btn { background: var(--accent); }
+.follow-btn.following { background: var(--success); }
+.dm-btn { background: var(--accent-2); }
+
+.edit-btn:hover,
+.follow-btn:hover,
+.dm-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow);
+}
+
+/* ====== Inbox ====== */
+.thread {
+  background: var(--card);
+  border: 1px solid var(--border);
+  padding: 12px;
+  margin-bottom: 10px;
+  border-radius: var(--radius);
+}
+
+.msg {
+  padding: 8px 10px;
+  border-radius: 10px;
+  max-width: 65%;
+  font-size: 14px;
+}
+.me { background: #1e3a2f; margin-left: auto; }
+.them { background: #1b1f29; margin-right: auto; }
+
+/* ====== Notifications ====== */
+.notif-list {
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+.notif-item {
+  display: flex;
+  gap: 10px;
+  padding: 12px;
+  border-bottom: 1px solid var(--border);
+  transition: background var(--transition);
+}
+.notif-item:hover { background: #1c2130; }
+.notif-item:last-child { border-bottom: none; }
+
+.notif-badge {
+  background: var(--danger);
+  color: #fff;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+}
+
+/* ====== Animations ====== */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* ====== Responsive ====== */
+@media (max-width: 960px) {
+  body {
+    flex-direction: column;
+    max-width: 95%;
+  }
+  .sidebar {
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
+/* ====== Particle Background ====== */
+#bgParticles {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: transparent;
+}
+
+/* HOVER CARD STYLES */
+#userHoverCard {
+  position: absolute;
+  display: none;
+  width: 300px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  box-shadow: 0 6px 16px rgba(0,0,0,0.2);
+  border-radius: var(--radius);
+  padding: 15px;
+  z-index: 9999;
+  font-size: 14px;
+  text-align: left;
+}
+#userHoverCard .card-header { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+#userHoverCard .card-avatar { width: 50px; height: 50px; border-radius: 50%; object-fit: cover; }
+#userHoverCard .card-username { font-weight: bold; font-size: 1.1em; }
+#userHoverCard .card-bio { color: #555; margin-bottom: 12px; line-height: 1.4; max-height: 80px; overflow: hidden; }
+#userHoverCard button { width: 100%; padding: 6px; cursor: pointer; }
+#userHoverCard .btn-follow { background: #0077cc; color: white; border: none; border-radius: 4px; }
+#userHoverCard .btn-unfollow { background: #ddd; color: #333; border: none; border-radius: 4px; }
+
+/* POLL STYLES */
+.poll-container { margin-top: 10px; border: 1px solid #eee; padding: 10px; border-radius: 8px; }
+.poll-option { 
+  position: relative; 
+  margin-bottom: 8px; 
+  border: 1px solid #ccc; 
+  border-radius: 4px; 
+  height: 36px; 
+  overflow: hidden; 
+  background: #fafafa;
+  cursor: pointer;
+}
+.poll-option:hover { border-color: #0077cc; }
+.poll-bar-fill {
+  height: 100%;
+  background-color: #dbf0ff;
+  width: 0%;
+  transition: width 0.4s ease;
+}
+.poll-text-overlay {
+  position: absolute;
+  top: 0; left: 10px;
+  line-height: 36px;
+  z-index: 2;
+  font-weight: 500;
+  color: #333;
+  pointer-events: none; /* clicks pass through to container */
+}
+.poll-count {
+  position: absolute;
+  top: 0; right: 10px;
+  line-height: 36px;
+  z-index: 2;
+  font-size: 0.9em;
+  color: #666;
+}
+.poll-voted .poll-option { cursor: default; }
+.poll-voted .poll-option:hover { border-color: #ccc; }
+
+/* Post Type Tabs */
+.post-type-tabs { display: flex; gap: 10px; margin-bottom: 10px; border-bottom: 1px solid #ddd; padding-bottom: 5px; }
+.tab-btn { background: none; border: none; cursor: pointer; padding: 5px 10px; font-weight: bold; color: #888; }
+.tab-btn.active { color: #0077cc; border-bottom: 2px solid #0077cc; }
+
+/* --- 1. PSP WAVES THEME (AUTHENTIC STYLE) --- */
+.wave-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  /* Classic PSP "Deep Blue" Gradient */
+  background: radial-gradient(circle at center, #1a4f7a 0%, #001f3f 100%);
+  overflow: hidden;
+  display: none; /* Hidden by default, toggled by JS */
+  pointer-events: none;
+}
+
+.wave {
+  position: absolute;
+  /* These dimensions are intentionally huge to create the curve effect */
+  width: 250vw;
+  height: 250vw;
+  /* Center the pivot point, but offset vertically */
+  left: -75vw; 
+  top: 40vh; 
+  
+  /* The "Ribbon" look comes from rounded corners + opacity */
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 40%;
+  
+  /* THIS CREATES THE GLOWING EDGE */
+  border: 4px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.1);
+  
+  /* Smooth infinite rotation */
+  animation: wave-rotate 12s infinite linear;
+  
+  /* Screen blend mode makes overlapping waves glow slightly */
+  mix-blend-mode: overlay;
+}
+
+/* Layer 1: The fast, bright top wave */
+.wave:nth-child(1) {
+  opacity: 0.6;
+  border-radius: 42%;
+  animation-duration: 20s;
+  background: linear-gradient(to top, rgba(255,255,255,0.1), rgba(255,255,255,0));
+  top: 50vh;
+}
+
+/* Layer 2: The middle body */
+.wave:nth-child(2) {
+  opacity: 0.4;
+  border-radius: 38%;
+  animation-duration: 32s;
+  background: linear-gradient(to top, rgba(255,255,255,0.08), rgba(255,255,255,0));
+  top: 45vh;
+  left: -70vw;
+}
+
+/* Layer 3: The slow, deep background wave */
+.wave:nth-child(3) {
+  opacity: 0.2;
+  border-radius: 45%;
+  animation-duration: 22s;
+  background: rgba(255, 255, 255, 0.05);
+  top: 55vh;
+  left: -80vw;
+}
+
+@keyframes wave-rotate {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* --- 2. UTILITY TO HIDE PARTICLES --- */
+body.mode-waves #bgParticles {
+  display: none !important;
+}
+
+body.mode-waves .wave-container {
+  display: block !important;
+}
+
+.badges { 
+  margin-top: 10px; 
+  display: flex; 
+  gap: 8px; 
+  flex-wrap: wrap; 
+}
+
+.badge { 
+  background: var(--card); 
+  border: 1px solid var(--border); 
+  padding: 6px 8px; 
+  border-radius: 8px; 
+  color: var(--text); 
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.game-btn-floating {
+position: fixed;
+left: 20px;
+top: 20px; /* Adjusts vertical position */
+width: 80px;  /* Square size */
+height: 80px; /* Square size */
+z-index: 9999; /* Ensures it sits on top of everything */
+border-radius: 12px; /* Slight rounding of corners */
+overflow: hidden;
+box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+border: 2px solid rgba(255, 255, 255, 0.2);
+background: #333; /* Fallback background color */
+transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.game-btn-floating:hover {
+transform: scale(1.1); /* Grows slightly on hover */
+box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5);
+}
+
+.game-btn-floating img {
+width: 100%;
+height: 100%;
+object-fit: cover; /* Ensures image fills the square without stretching */
+display: block;
+}
